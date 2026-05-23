@@ -52,16 +52,16 @@ export function analyzeIncident(incident: IncidentDetail): IncidentAnalysis {
     }
 
     return {
-      summary: `${incident.serviceName} shows a sharp HTTP 5xx increase after a recent release. The strongest correlated signal is the deploy ${deploy.branch} followed by payment errors in logs.`,
+      summary: `${incident.serviceName} показывает резкий рост HTTP 5xx после недавнего Release. Самый сильный signal — Deployment ${deploy.branch}, после которого в Logs появились ошибки payment flow.`,
       affectedServices: [incident.serviceName, ...new Set(incident.logs.filter((log) => log.serviceName !== incident.serviceName).map((log) => log.serviceName))],
-      hypothesis: `Most likely root cause is a regression in ${deploy.branch}: the changed retry/timeout behavior is causing upstream payment failures.`,
+      hypothesis: `Вероятная root-cause hypothesis — regression в ${deploy.branch}: изменение retry/timeout поведения вызывает upstream failures в payment flow.`,
       confidence: retryLog ? "high" : "medium",
       reasoning: [
-        "The error-rate metric breached the incident threshold after a stable baseline.",
-        "A deploy for the affected service happened within the same short time window.",
-        retryLog ? "Logs mention retry/timeouts that match the deploy summary." : "There are no direct exception logs, so confidence is not high."
+        "Error-rate Metric превысила incident threshold после стабильного baseline.",
+        "Deployment affected service произошел в том же коротком timeline window.",
+        retryLog ? "Logs содержат retry/timeouts, которые совпадают с Deployment summary." : "Прямых exception Logs нет, поэтому confidence не high."
       ],
-      nextStep: "Validate the deploy diff and rollback payment-svc to the previous stable version if the regression is confirmed.",
+      nextStep: "Проверьте Deployment diff и выполните rollback payment-svc на предыдущую стабильную версию, если regression подтвердится.",
       evidence: refs
     };
   }
@@ -80,16 +80,16 @@ export function analyzeIncident(incident: IncidentDetail): IncidentAnalysis {
     }
 
     return {
-      summary: `${incident.serviceName} is degraded because a downstream dependency is timing out. Metrics and logs point to the external loyalty API rather than an application deploy.`,
+      summary: `${incident.serviceName} деградирует из-за timeout downstream dependency. Metrics и Logs указывают на external loyalty API, а не на свежий application Deployment.`,
       affectedServices: [incident.serviceName],
-      hypothesis: "Most likely root cause is an external dependency outage or latency spike in loyalty-api.",
+      hypothesis: "Вероятная root-cause hypothesis — outage или latency spike во external dependency loyalty-api.",
       confidence: dependencyLog ? "high" : "medium",
       reasoning: [
-        "External API error rate is materially above the threshold.",
-        "Logs contain dependency timeout/circuit-breaker messages.",
-        "The available deploy event is older and has weak correlation."
+        "External API error rate заметно выше threshold.",
+        "Logs содержат dependency timeout/circuit-breaker messages.",
+        "Доступный Deployment старше и имеет слабую correlation."
       ],
-      nextStep: "Open the dependency runbook, switch checkout to degraded mode if available, and notify the owning integration team.",
+      nextStep: "Откройте dependency runbook, переведите checkout в degraded mode, если он доступен, и уведомите owning integration team.",
       evidence: refs
     };
   }
@@ -105,16 +105,16 @@ export function analyzeIncident(incident: IncidentDetail): IncidentAnalysis {
     }
 
     return {
-      summary: `${incident.serviceName} has a latency degradation under load. CPU and queue pressure suggest resource saturation or an expensive query path.`,
+      summary: `${incident.serviceName} показывает latency degradation под нагрузкой. CPU и queue pressure указывают на resource saturation или дорогой query path.`,
       affectedServices: [incident.serviceName],
-      hypothesis: "Most likely root cause is performance saturation in the search/catalog path, not a direct release regression.",
+      hypothesis: "Вероятная root-cause hypothesis — performance saturation в search/catalog path, а не прямой release regression.",
       confidence: "medium",
       reasoning: [
-        "p95 latency crossed the response-time threshold.",
-        "CPU pressure and queue backlog rose in the same window.",
-        "No strong deploy correlation is present in the last few minutes."
+        "p95 latency превысила response-time threshold.",
+        "CPU pressure и queue backlog выросли в одном window.",
+        "Сильной deploy correlation в последние минуты нет."
       ],
-      nextStep: "Check slow-query traces for the affected route and temporarily scale catalog workers or reduce cache-miss pressure.",
+      nextStep: "Проверьте slow-query Traces по affected route и временно масштабируйте catalog workers или снизьте cache-miss pressure.",
       evidence: refs
     };
   }
@@ -128,16 +128,16 @@ export function analyzeIncident(incident: IncidentDetail): IncidentAnalysis {
   );
 
   return {
-    summary: `There is an alert for ${incident.serviceName}, but the current context is too sparse to form a reliable root-cause hypothesis.`,
+    summary: `Есть Alert по ${incident.serviceName}, но текущий context слишком неполный для надежной root-cause hypothesis.`,
     affectedServices: [incident.serviceName],
-    hypothesis: "No confident root cause. Start with manual validation of service health, recent changes, and user impact.",
+    hypothesis: "Нет уверенной root cause. Начните с ручной проверки service health, recent changes и user impact.",
     confidence: "low",
     reasoning: [
-      "The metric values do not cross a strong rule threshold.",
-      "There is no recent deploy correlation.",
-      "The available logs are not specific enough to justify a confident AI recommendation."
+      "Metric values не пересекают сильный rule threshold.",
+      "Свежей deploy correlation нет.",
+      "Доступные Logs недостаточно специфичны для уверенной AI recommendation."
     ],
-    nextStep: "Open the service dashboard and collect a wider time window before deciding on mitigation.",
+    nextStep: "Откройте service Dashboard и соберите более широкий time window перед выбором mitigation.",
     evidence: refs
   };
 }

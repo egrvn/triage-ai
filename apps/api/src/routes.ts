@@ -2,6 +2,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   AlertIngestSchema,
   FeedbackRequestSchema,
+  IntegrationKindSchema,
+  UpdateIncidentStatusSchema,
   UpdateIntegrationSettingSchema
 } from "@coursework/shared";
 import { ZodError, type ZodSchema } from "zod";
@@ -41,7 +43,7 @@ export async function registerRoutes(app: FastifyInstance, repository: IncidentR
         incident: analyzed,
         notification: {
           channel: "telegram",
-          text: `[${analyzed.severity.toUpperCase()}] ${analyzed.title}: AI summary is ready`,
+          text: `[${analyzed.severity.toUpperCase()}] ${analyzed.title}: AI summary готова`,
           deepLink: `/incidents/${analyzed.id}`
         }
       };
@@ -74,6 +76,20 @@ export async function registerRoutes(app: FastifyInstance, repository: IncidentR
     return repository.saveAnalysis(incident.id, analysis);
   });
 
+  app.patch<{ Params: { id: string } }>("/api/incidents/:id/status", async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
+    try {
+      const input = parse(UpdateIncidentStatusSchema, request.body);
+      return await repository.updateIncidentStatus(request.params.id, input);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return sendZodError(reply, error);
+      }
+
+      const message = error instanceof Error ? error.message : "Incident status update failed";
+      return reply.status(message.includes("not found") ? 404 : 500).send({ error: message });
+    }
+  });
+
   app.post<{ Params: { id: string } }>("/api/incidents/:id/feedback", async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
     try {
       const input = parse(FeedbackRequestSchema, request.body);
@@ -103,6 +119,22 @@ export async function registerRoutes(app: FastifyInstance, repository: IncidentR
       return reply.status(message.includes("not found") ? 404 : 500).send({ error: message });
     }
   });
+
+  app.post<{ Params: { kind: string } }>("/api/settings/integrations/:kind/test", async (request, reply) => {
+    try {
+      const kind = parse(IntegrationKindSchema, request.params.kind);
+      return await repository.testIntegration(kind);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return sendZodError(reply, error);
+      }
+
+      const message = error instanceof Error ? error.message : "Integration test failed";
+      return reply.status(message.includes("not found") ? 404 : 500).send({ error: message });
+    }
+  });
+
+  app.post("/api/demo/reset", async () => repository.resetDemo());
 
   app.post("/api/ingest/alerts", async (request, reply) => {
     try {

@@ -4,6 +4,13 @@ import { defaultIntegrationSettings } from "../src/repositories/defaultSettings.
 
 const prisma = new PrismaClient();
 
+function toPrismaIntegrationData(setting: (typeof defaultIntegrationSettings)[number]) {
+  return {
+    ...setting,
+    lastCheck: setting.lastCheck ? new Date(setting.lastCheck) : undefined
+  };
+}
+
 for (const scenario of scenarioFixtures) {
   await prisma.scenario.upsert({
     where: { id: scenario.id },
@@ -28,8 +35,8 @@ for (const scenario of scenarioFixtures) {
 for (const setting of defaultIntegrationSettings) {
   await prisma.integrationSetting.upsert({
     where: { kind: setting.kind },
-    update: setting,
-    create: setting
+    update: toPrismaIntegrationData(setting),
+    create: toPrismaIntegrationData(setting)
   });
 }
 

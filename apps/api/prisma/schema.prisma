@@ -103,10 +103,13 @@ model IncidentFeedback {
 }
 
 model IntegrationSetting {
-  kind        String @id
-  enabled     Boolean
-  mode        String
-  displayName String
-  status      String
-  description String
+  kind                   String    @id
+  enabled                Boolean
+  mode                   String
+  displayName            String
+  status                 String
+  description            String
+  lastCheck              DateTime?
+  samplePayload          Json?
+  productionRequirements Json      @default("[]")
 }

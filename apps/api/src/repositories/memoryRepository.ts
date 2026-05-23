@@ -1,11 +1,14 @@
 import type {
   FeedbackRequest,
   FeedbackResponse,
+  DemoResetResponse,
   IncidentAnalysis,
   IncidentDetail,
   IncidentListItem,
   IntegrationSetting,
+  TestIntegrationResponse,
   ScenarioSummary,
+  UpdateIncidentStatus,
   UpdateIntegrationSetting
 } from "@coursework/shared";
 import { scenarioFixtures } from "../data/scenarios.js";
@@ -122,6 +125,22 @@ export class MemoryIncidentRepository implements IncidentRepository {
     return clone(nextIncident);
   }
 
+  async updateIncidentStatus(incidentId: string, input: UpdateIncidentStatus): Promise<IncidentDetail> {
+    const incident = this.incidents.get(incidentId);
+
+    if (!incident) {
+      throw new Error(`Incident ${incidentId} was not found`);
+    }
+
+    const nextIncident: IncidentDetail = {
+      ...incident,
+      status: input.status
+    };
+
+    this.incidents.set(incidentId, nextIncident);
+    return clone(nextIncident);
+  }
+
   async saveFeedback(incidentId: string, _feedback: FeedbackRequest): Promise<FeedbackResponse> {
     if (!this.incidents.has(incidentId)) {
       throw new Error(`Incident ${incidentId} was not found`);
@@ -156,5 +175,40 @@ export class MemoryIncidentRepository implements IncidentRepository {
 
     this.settings.set(input.kind, next);
     return clone(next);
+  }
+
+  async testIntegration(kind: IntegrationSetting["kind"]): Promise<TestIntegrationResponse> {
+    const current = this.settings.get(kind);
+
+    if (!current) {
+      throw new Error(`Integration ${kind} was not found`);
+    }
+
+    const checkedAt = new Date().toISOString();
+    const next: IntegrationSetting = {
+      ...current,
+      lastCheck: checkedAt,
+      status: current.enabled ? "healthy" : "disabled"
+    };
+
+    this.settings.set(kind, next);
+    return {
+      integration: clone(next),
+      checkedAt,
+      sampleAccepted: current.enabled
+    };
+  }
+
+  async resetDemo(): Promise<DemoResetResponse> {
+    const incidentsCleared = this.incidents.size;
+    this.incidents.clear();
+    this.settings = new Map(defaultIntegrationSettings.map((setting) => [setting.kind, clone(setting)]));
+
+    return {
+      ok: true,
+      incidentsCleared,
+      integrationsReset: this.settings.size,
+      timestamp: new Date().toISOString()
+    };
   }
 }

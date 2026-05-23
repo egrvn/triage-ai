@@ -1,12 +1,15 @@
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import type {
   FeedbackRequest,
   FeedbackResponse,
+  DemoResetResponse,
   IncidentAnalysis,
   IncidentDetail,
   IncidentListItem,
   IntegrationSetting,
+  TestIntegrationResponse,
   ScenarioSummary,
+  UpdateIncidentStatus,
   UpdateIntegrationSetting
 } from "@coursework/shared";
 import { scenarioFixtures } from "../data/scenarios.js";
@@ -17,6 +20,56 @@ const nowId = () => `${Date.now().toString(36)}-${Math.random().toString(36).sli
 
 function dateToIso(value: Date | string): string {
   return typeof value === "string" ? value : value.toISOString();
+}
+
+function toJsonValue(value: unknown): Prisma.InputJsonValue | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
+
+function toPrismaIntegrationData(setting: IntegrationSetting) {
+  return {
+    kind: setting.kind,
+    enabled: setting.enabled,
+    mode: setting.mode,
+    displayName: setting.displayName,
+    status: setting.status,
+    description: setting.description,
+    lastCheck: setting.lastCheck ? new Date(setting.lastCheck) : undefined,
+    samplePayload: toJsonValue(setting.samplePayload),
+    productionRequirements: toJsonValue(setting.productionRequirements) ?? []
+  };
+}
+
+function toIntegrationSetting(setting: {
+  kind: string;
+  enabled: boolean;
+  mode: string;
+  displayName: string;
+  status: string;
+  description: string;
+  lastCheck: Date | null;
+  samplePayload: unknown;
+  productionRequirements: unknown;
+}): IntegrationSetting {
+  return {
+    kind: setting.kind as IntegrationSetting["kind"],
+    enabled: setting.enabled,
+    mode: setting.mode as IntegrationSetting["mode"],
+    displayName: setting.displayName,
+    status: setting.status as IntegrationSetting["status"],
+    description: setting.description,
+    lastCheck: setting.lastCheck ? dateToIso(setting.lastCheck) : undefined,
+    samplePayload: setting.samplePayload && typeof setting.samplePayload === "object"
+      ? (setting.samplePayload as Record<string, unknown>)
+      : undefined,
+    productionRequirements: Array.isArray(setting.productionRequirements)
+      ? setting.productionRequirements.map(String)
+      : []
+  };
 }
 
 export class PrismaIncidentRepository implements IncidentRepository {
@@ -234,6 +287,19 @@ export class PrismaIncidentRepository implements IncidentRepository {
     return incident;
   }
 
+  async updateIncidentStatus(incidentId: string, input: UpdateIncidentStatus): Promise<IncidentDetail> {
+    await this.prisma.incident.update({
+      where: { id: incidentId },
+      data: { status: input.status }
+    });
+
+    const incident = await this.getIncident(incidentId);
+    if (!incident) {
+      throw new Error(`Incident ${incidentId} was not found`);
+    }
+    return incident;
+  }
+
   async saveFeedback(incidentId: string, feedback: FeedbackRequest): Promise<FeedbackResponse> {
     const created = await this.prisma.incidentFeedback.create({
       data: {
@@ -254,7 +320,8 @@ export class PrismaIncidentRepository implements IncidentRepository {
 
   async listIntegrations(): Promise<IntegrationSetting[]> {
     await this.ensureSettings();
-    return this.prisma.integrationSetting.findMany({ orderBy: { kind: "asc" } }) as Promise<IntegrationSetting[]>;
+    const settings = await this.prisma.integrationSetting.findMany({ orderBy: { kind: "asc" } });
+    return settings.map(toIntegrationSetting);
   }
 
   async updateIntegration(input: UpdateIntegrationSetting): Promise<IntegrationSetting> {
@@ -267,14 +334,57 @@ export class PrismaIncidentRepository implements IncidentRepository {
     const mode = input.mode ?? current.mode;
     const enabled = input.enabled ?? current.enabled;
 
-    return this.prisma.integrationSetting.update({
+    const updated = await this.prisma.integrationSetting.update({
       where: { kind: input.kind },
       data: {
         mode,
         enabled,
         status: enabled ? (mode === "adapter" ? "needs_config" : "healthy") : "disabled"
       }
-    }) as Promise<IntegrationSetting>;
+    });
+
+    return toIntegrationSetting(updated);
+  }
+
+  async testIntegration(kind: IntegrationSetting["kind"]): Promise<TestIntegrationResponse> {
+    await this.ensureSettings();
+    const current = await this.prisma.integrationSetting.findUnique({ where: { kind } });
+    if (!current) {
+      throw new Error(`Integration ${kind} was not found`);
+    }
+
+    const checkedAt = new Date();
+    const updated = await this.prisma.integrationSetting.update({
+      where: { kind },
+      data: {
+        lastCheck: checkedAt,
+        status: current.enabled ? "healthy" : "disabled"
+      }
+    });
+
+    return {
+      integration: toIntegrationSetting(updated),
+      checkedAt: dateToIso(checkedAt),
+      sampleAccepted: current.enabled
+    };
+  }
+
+  async resetDemo(): Promise<DemoResetResponse> {
+    const deleted = await this.prisma.incident.deleteMany();
+    for (const setting of defaultIntegrationSettings) {
+      await this.prisma.integrationSetting.upsert({
+        where: { kind: setting.kind },
+        update: toPrismaIntegrationData(setting),
+        create: toPrismaIntegrationData(setting)
+      });
+    }
+
+    return {
+      ok: true,
+      incidentsCleared: deleted.count,
+      integrationsReset: defaultIntegrationSettings.length,
+      timestamp: new Date().toISOString()
+    };
   }
 
   private async ensureScenarios() {
@@ -305,7 +415,7 @@ export class PrismaIncidentRepository implements IncidentRepository {
       await this.prisma.integrationSetting.upsert({
         where: { kind: setting.kind },
         update: {},
-        create: setting
+        create: toPrismaIntegrationData(setting)
       });
     }
   }
