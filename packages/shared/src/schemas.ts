@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const SeveritySchema = z.enum(["critical", "warning", "info"]);
-export const IncidentStatusSchema = z.enum(["active", "acknowledged", "resolved"]);
+export const IncidentStatusSchema = z.enum(["active", "acknowledged", "escalated", "resolved"]);
 export const ConfidenceSchema = z.enum(["high", "medium", "low"]);
 export const EvidenceKindSchema = z.enum(["metric", "log", "deploy"]);
 export const IntegrationKindSchema = z.enum(["prometheus", "elk", "telegram", "slack", "email", "llm"]);
@@ -113,13 +113,33 @@ export const IntegrationSettingSchema = z.object({
   mode: z.enum(["mock", "adapter", "disabled"]),
   displayName: z.string(),
   status: z.enum(["healthy", "needs_config", "disabled"]),
-  description: z.string()
+  description: z.string(),
+  lastCheck: z.string().datetime().optional(),
+  samplePayload: z.record(z.unknown()).optional(),
+  productionRequirements: z.array(z.string()).default([])
 });
 
 export const UpdateIntegrationSettingSchema = z.object({
   kind: IntegrationKindSchema,
   enabled: z.boolean().optional(),
   mode: z.enum(["mock", "adapter", "disabled"]).optional()
+});
+
+export const UpdateIncidentStatusSchema = z.object({
+  status: IncidentStatusSchema
+});
+
+export const DemoResetResponseSchema = z.object({
+  ok: z.boolean(),
+  incidentsCleared: z.number(),
+  integrationsReset: z.number(),
+  timestamp: z.string().datetime()
+});
+
+export const TestIntegrationResponseSchema = z.object({
+  integration: IntegrationSettingSchema,
+  checkedAt: z.string().datetime(),
+  sampleAccepted: z.boolean()
 });
 
 export const AlertIngestSchema = z.object({
@@ -159,3 +179,6 @@ export type FeedbackRequest = z.infer<typeof FeedbackRequestSchema>;
 export type FeedbackResponse = z.infer<typeof FeedbackResponseSchema>;
 export type IntegrationSetting = z.infer<typeof IntegrationSettingSchema>;
 export type UpdateIntegrationSetting = z.infer<typeof UpdateIntegrationSettingSchema>;
+export type UpdateIncidentStatus = z.infer<typeof UpdateIncidentStatusSchema>;
+export type DemoResetResponse = z.infer<typeof DemoResetResponseSchema>;
+export type TestIntegrationResponse = z.infer<typeof TestIntegrationResponseSchema>;

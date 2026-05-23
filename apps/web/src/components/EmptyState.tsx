@@ -1,12 +1,20 @@
 import { Activity } from "lucide-react";
 
-export function EmptyState() {
+type EmptyStateProps = {
+  title?: string;
+  description?: string;
+};
+
+export function EmptyState({
+  title = "Нет активных инцидентов",
+  description = "Запустите demo сценарий, чтобы увидеть AI-сводку, hypothesis и evidence."
+}: EmptyStateProps) {
   return (
     <section className="empty-state">
       <Activity size={28} />
       <div>
-        <h2>Нет активных инцидентов</h2>
-        <p>Запусти mock-сценарий, чтобы увидеть AI-сводку, гипотезу и доказательства.</p>
+        <h2>{title}</h2>
+        <p>{description}</p>
       </div>
     </section>
   );
