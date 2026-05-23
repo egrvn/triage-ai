@@ -38,7 +38,7 @@ describe("analyzeIncident", () => {
     const result = analyzeIncident(incidentFromScenario("low-confidence-sparse-data"));
 
     expect(result.confidence).toBe("low");
-    expect(result.hypothesis).toContain("No confident root cause");
-    expect(result.reasoning.join(" ")).toContain("not specific enough");
+    expect(result.hypothesis).toContain("Нет уверенной root cause");
+    expect(result.reasoning.join(" ")).toContain("недостаточно специфичны");
   });
 });

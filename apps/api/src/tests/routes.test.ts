@@ -60,4 +60,57 @@ describe("api routes", () => {
 
     await app.close();
   });
+
+  it("updates incident status, resets demo data, and tests integration connection", async () => {
+    const app = await createApp({
+      repository: new MemoryIncidentRepository(),
+      config: {
+        nodeEnv: "test",
+        host: "127.0.0.1",
+        port: 0,
+        storageMode: "memory",
+        corsOrigin: "*"
+      }
+    });
+
+    const scenario = await app.inject({
+      method: "POST",
+      url: "/api/scenarios/release-regression-5xx/run"
+    });
+    const incidentId = scenario.json().incident.id;
+
+    const statusResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/incidents/${incidentId}/status`,
+      payload: { status: "acknowledged" }
+    });
+
+    expect(statusResponse.statusCode).toBe(200);
+    expect(statusResponse.json().status).toBe("acknowledged");
+
+    const integrationResponse = await app.inject({
+      method: "POST",
+      url: "/api/settings/integrations/prometheus/test"
+    });
+
+    expect(integrationResponse.statusCode).toBe(200);
+    expect(integrationResponse.json().integration.kind).toBe("prometheus");
+    expect(integrationResponse.json().sampleAccepted).toBe(true);
+
+    const resetResponse = await app.inject({
+      method: "POST",
+      url: "/api/demo/reset"
+    });
+
+    expect(resetResponse.statusCode).toBe(200);
+    expect(resetResponse.json().incidentsCleared).toBeGreaterThan(0);
+
+    const incidents = await app.inject({
+      method: "GET",
+      url: "/api/incidents"
+    });
+    expect(incidents.json()).toEqual([]);
+
+    await app.close();
+  });
 });
