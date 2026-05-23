@@ -203,3 +203,39 @@ Docker build локально не проверен: в текущем окру�
 - Подключить реальные adapter implementations после выдачи тестовых Prometheus/ELK endpoints и правил доступа.
 - Добавить auth/RBAC перед пилотом на инфраструктуре заказчика.
 - Оптимизировать frontend bundle перед production/pilot.
+
+## 11. Addendum: интерактивный MVP с routing/auth
+
+После первичной реализации приложение доработано из статичной MVP-консоли в интерактивный продуктовый MVP:
+
+- публичная landing page перенесена на `/`;
+- текущая triage-консоль перенесена в защищенный route `/dashboard`;
+- добавлен mock login на `/login` с credentials `demo@triage.ai` / `demo1234`;
+- добавлены защищенные routes `/integrations`, `/docs`, `/settings`;
+- добавлен transparent mock session в `localStorage` без fake JWT;
+- добавлен logout и redirect guard для закрытых страниц;
+- все активные UI controls получили действие или disabled state с объяснением;
+- demo scenarios теперь переводят карточку в running state, создают incident, обновляют metrics и открывают details;
+- incident actions меняют status: `active`, `acknowledged`, `escalated`, `resolved`;
+- integration cards открывают details и выполняют mock `Test connection`;
+- добавлен role switch `On-call / Escalation` с разными подсказками;
+- добавлена onboarding-инструкция `Как пользоваться Triage AI`;
+- добавлена in-app документация на `/docs`;
+- внедрена amber/orange theme, light/dark toggle и новые UI-компоненты:
+  - `BackgroundPaths`;
+  - `AnimatedGlowingSearchBar`;
+  - `AnimatedThemeToggler`;
+  - shadcn-style `Button`;
+- интерфейс русифицирован, DevOps/SRE terms сохранены на английском.
+
+Новые backend endpoints:
+
+- `PATCH /api/incidents/:id/status`;
+- `POST /api/demo/reset`;
+- `POST /api/settings/integrations/:kind/test`.
+
+Обновленные документы:
+
+- `README.md` - русскоязычный запуск, routes, demo credentials, mock auth, API, Cloud.ru outline;
+- `docs/README.md` - продуктовая документация;
+- `docs/NIKITA_IMPLEMENTATION_REPORT.md` - данный addendum.
