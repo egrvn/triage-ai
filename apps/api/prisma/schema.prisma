@@ -1,0 +1,115 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Scenario {
+  id           String     @id
+  name         String
+  incidentType String
+  serviceName  String
+  description  String
+  recommended  Boolean    @default(false)
+  incidents    Incident[]
+}
+
+model Incident {
+  id          String   @id
+  title       String
+  serviceName String
+  severity    String
+  status      String
+  startedAt   DateTime
+  detectedAt  DateTime
+  scenarioId  String?
+  scenario    Scenario? @relation(fields: [scenarioId], references: [id])
+
+  summary    String?
+  hypothesis String?
+  confidence String?
+  reasoning  Json?
+  nextStep   String?
+
+  metrics   MetricPoint[]
+  logs      LogEvent[]
+  deploys   DeployEvent[]
+  evidence  AnalysisEvidence[]
+  feedbacks IncidentFeedback[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model MetricPoint {
+  id          String   @id
+  incidentId  String
+  incident    Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  timestamp   DateTime
+  serviceName String
+  name        String
+  value       Float
+  unit        String
+  labels      Json     @default("{}")
+}
+
+model LogEvent {
+  id          String   @id
+  incidentId  String
+  incident    Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  timestamp   DateTime
+  serviceName String
+  level       String
+  message     String
+  traceId     String?
+  source      String   @default("elk")
+}
+
+model DeployEvent {
+  id          String   @id
+  incidentId  String
+  incident    Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  timestamp   DateTime
+  serviceName String
+  version     String
+  branch      String
+  commitSha   String
+  author      String
+  summary     String
+}
+
+model AnalysisEvidence {
+  id         String   @id
+  incidentId String
+  incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  kind       String
+  refId      String
+  title      String
+  quote      String
+  weight     Float
+}
+
+model IncidentFeedback {
+  id                 String   @id
+  incidentId          String
+  incident            Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  usefulness          String
+  hypothesisVerdict   String
+  correctedRootCause  String?
+  createdAt           DateTime @default(now())
+}
+
+model IntegrationSetting {
+  kind                   String    @id
+  enabled                Boolean
+  mode                   String
+  displayName            String
+  status                 String
+  description            String
+  lastCheck              DateTime?
+  samplePayload          Json?
+  productionRequirements Json      @default("[]")
+}
