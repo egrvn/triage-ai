@@ -5,7 +5,7 @@ import {
   IntegrationKindSchema,
   UpdateIncidentStatusSchema,
   UpdateIntegrationSettingSchema
-} from "@coursework/shared";
+} from "@triage-ai/shared";
 import { ZodError, type ZodSchema } from "zod";
 import { analyzeIncident } from "./services/analyzer.js";
 import type { IncidentRepository } from "./repositories/types.js";
@@ -27,7 +27,7 @@ function sendZodError(reply: FastifyReply, error: ZodError) {
 export async function registerRoutes(app: FastifyInstance, repository: IncidentRepository) {
   app.get("/api/health", async () => ({
     ok: true,
-    service: "cloudru-ai-monitoring-assistant",
+    service: "triage-ai",
     timestamp: new Date().toISOString()
   }));
 
@@ -43,12 +43,12 @@ export async function registerRoutes(app: FastifyInstance, repository: IncidentR
         incident: analyzed,
         notification: {
           channel: "telegram",
-          text: `[${analyzed.severity.toUpperCase()}] ${analyzed.title}: AI summary готова`,
+          text: `[${analyzed.severity.toUpperCase()}] ${analyzed.title}: сводка ИИ готова`,
           deepLink: `/incidents/${analyzed.id}`
         }
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Scenario run failed";
+      const message = error instanceof Error ? error.message : "scenario_run_failed";
       return reply.status(message.includes("not found") ? 404 : 500).send({ error: message });
     }
   });
@@ -85,7 +85,7 @@ export async function registerRoutes(app: FastifyInstance, repository: IncidentR
         return sendZodError(reply, error);
       }
 
-      const message = error instanceof Error ? error.message : "Incident status update failed";
+      const message = error instanceof Error ? error.message : "incident_status_update_failed";
       return reply.status(message.includes("not found") ? 404 : 500).send({ error: message });
     }
   });
@@ -99,7 +99,7 @@ export async function registerRoutes(app: FastifyInstance, repository: IncidentR
         return sendZodError(reply, error);
       }
 
-      const message = error instanceof Error ? error.message : "Feedback failed";
+      const message = error instanceof Error ? error.message : "feedback_failed";
       return reply.status(message.includes("not found") ? 404 : 500).send({ error: message });
     }
   });
@@ -115,7 +115,7 @@ export async function registerRoutes(app: FastifyInstance, repository: IncidentR
         return sendZodError(reply, error);
       }
 
-      const message = error instanceof Error ? error.message : "Integration update failed";
+      const message = error instanceof Error ? error.message : "integration_update_failed";
       return reply.status(message.includes("not found") ? 404 : 500).send({ error: message });
     }
   });
@@ -129,7 +129,7 @@ export async function registerRoutes(app: FastifyInstance, repository: IncidentR
         return sendZodError(reply, error);
       }
 
-      const message = error instanceof Error ? error.message : "Integration test failed";
+      const message = error instanceof Error ? error.message : "integration_test_failed";
       return reply.status(message.includes("not found") ? 404 : 500).send({ error: message });
     }
   });
@@ -152,24 +152,24 @@ export async function registerRoutes(app: FastifyInstance, repository: IncidentR
   app.post("/api/ingest/metrics", async (_request, reply) => {
     return reply.status(202).send({
       accepted: true,
-      mode: "mock",
-      note: "Metric slices are attached through scenario runs in this MVP."
+      mode: "test",
+      note: "Срезы метрик добавляются через демонстрационные сценарии в этом MVP."
     });
   });
 
   app.post("/api/ingest/logs", async (_request, reply) => {
     return reply.status(202).send({
       accepted: true,
-      mode: "mock",
-      note: "Log slices are attached through scenario runs in this MVP."
+      mode: "test",
+      note: "Срезы логов добавляются через демонстрационные сценарии в этом MVP."
     });
   });
 
   app.post("/api/ingest/deploys", async (_request, reply) => {
     return reply.status(202).send({
       accepted: true,
-      mode: "mock",
-      note: "Deploy events are attached through scenario runs in this MVP."
+      mode: "test",
+      note: "События развертывания добавляются через демонстрационные сценарии в этом MVP."
     });
   });
 }

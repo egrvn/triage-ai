@@ -1,124 +1,26 @@
-import type { IncidentDetail, IncidentListItem, IncidentStatus, ScenarioSummary } from "@coursework/shared";
+import type { IncidentStatus, ScenarioSummary } from "@triage-ai/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  AlertTriangle,
-  ArrowUpRight,
-  CheckCircle2,
-  ClipboardCheck,
-  Clock3,
-  GitBranch,
-  Info,
-  Play,
-  RefreshCcw,
-  ShieldAlert,
-  Sparkles,
-  XCircle
-} from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Activity, AlertTriangle, ArrowRight, Info, Play, RefreshCcw, ShieldAlert, Sparkles } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { EmptyState } from "@/components/EmptyState";
 import { StatusPill } from "@/components/StatusPill";
 import { AnimatedGlowingSearchBar } from "@/components/ui/animated-glowing-search-bar";
 import { Button } from "@/components/ui/button";
+import {
+  IncidentActions,
+  IncidentTrendChart,
+  MetricCard,
+  includesQuery,
+  actionLabel
+} from "@/features/incidents/components";
+import { buildTrendPoint, guideSteps, roleCopy, useIncidentWorkspace } from "@/features/incidents/incident-workspace";
 import { api } from "@/lib/api";
-import { confidenceLabel, formatClock, statusLabel } from "@/lib/labels";
-
-const ROLE_KEY = "triage-ai-role";
-const GUIDE_KEY = "triage-ai-guide-visible";
-
-type RoleMode = "on-call" | "escalation";
-
-const roleCopy: Record<RoleMode, { title: string; hint: string; actions: string[] }> = {
-  "on-call": {
-    title: "On-call view",
-    hint: "Сфокусируйтесь на impact, affected service и ближайшем безопасном действии.",
-    actions: ["Проверить service health", "Сравнить error rate до/после Deployment", "Подготовить rollback plan", "Создать escalation при росте impact"]
-  },
-  escalation: {
-    title: "Escalation view",
-    hint: "Проверьте timeline, evidence и confidence перед передачей контекста команде.",
-    actions: ["Проверить evidence coverage", "Сверить timeline и deploy correlation", "Оценить confidence", "Передать context владельцу service"]
-  }
-};
-
-const guideSteps = [
-  ["Выберите demo сценарий", "Сценарий имитирует поток Signals из Prometheus/ELK и создаёт incident для анализа."],
-  ["Запустите triage", "Нажмите play, чтобы система собрала context, сформировала auto-summary и root-cause hypothesis."],
-  ["Проверьте evidence", "Откройте incident details и проверьте Logs, Metrics, timeline и deploy correlation."],
-  ["Выберите действие", "On-call может принять incident в работу, закрыть его или отправить в escalation."],
-  ["Проверьте интеграции", "В разделе Интеграции показано, какие источники работают в mock mode, а какие требуют production настройки."]
-];
+import { confidenceLabel, formatClock, severityLabel, statusLabel } from "@/lib/labels";
+import { pilotMetrics } from "@/lib/pilot-metrics";
 
 function delay(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
-function includesQuery(value: string | undefined, query: string) {
-  return (value ?? "").toLowerCase().includes(query);
-}
-
-function actionLabel(status: IncidentStatus) {
-  if (status === "acknowledged") return "Принят в работу";
-  if (status === "escalated") return "Escalated";
-  if (status === "resolved") return "Закрыт";
-  return "Активен";
-}
-
-function MetricCard({ label, value, caption, icon }: { label: string; value: number; caption: string; icon: ReactNode }) {
-  return (
-    <article className="metric-card">
-      <div className="metric-card__icon">{icon}</div>
-      <div>
-        <span>{label}</span>
-        <strong>{value}</strong>
-        <small>{caption}</small>
-      </div>
-    </article>
-  );
-}
-
-function IncidentActions({
-  incident,
-  disabled,
-  onStatus
-}: {
-  incident: Pick<IncidentListItem, "id" | "status">;
-  disabled?: boolean;
-  onStatus: (id: string, status: IncidentStatus) => void;
-}) {
-  return (
-    <div className="incident-actions">
-      <Button
-        type="button"
-        size="sm"
-        variant="secondary"
-        disabled={disabled || incident.status === "acknowledged" || incident.status === "resolved"}
-        onClick={() => onStatus(incident.id, "acknowledged")}
-      >
-        <ClipboardCheck size={15} />
-        Принять в работу
-      </Button>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        disabled={disabled || incident.status === "escalated" || incident.status === "resolved"}
-        onClick={() => onStatus(incident.id, "escalated")}
-      >
-        <ArrowUpRight size={15} />
-        Эскалировать
-      </Button>
-      <Button
-        type="button"
-        size="sm"
-        variant="ghost"
-        disabled={disabled || incident.status === "resolved"}
-        onClick={() => onStatus(incident.id, "resolved")}
-      >
-        <XCircle size={15} />
-        Закрыть
-      </Button>
-    </div>
-  );
 }
 
 function ScenarioCard({
@@ -136,13 +38,13 @@ function ScenarioCard({
 }) {
   return (
     <article className={`scenario-card ${active ? "active" : ""}`}>
-      <button className="scenario-card__body" type="button" onClick={onSelect} aria-label={`Выбрать scenario ${scenario.name}`}>
+      <button className="scenario-card__body" type="button" onClick={onSelect} aria-label={`Выбрать сценарий ${scenario.name}`}>
         <span className="scenario-card__kicker">{scenario.incidentType}</span>
         <strong>{scenario.name}</strong>
         <p>{scenario.description}</p>
         <div className="scenario-card__meta">
           <span>{scenario.serviceName}</span>
-          {scenario.recommended ? <StatusPill tone="healthy">recommended</StatusPill> : null}
+          {scenario.recommended ? <StatusPill tone="healthy">рекомендуется</StatusPill> : null}
         </div>
       </button>
       <Button
@@ -151,168 +53,21 @@ function ScenarioCard({
         className="scenario-card__play"
         disabled={running}
         onClick={onRun}
-        aria-label={`Запустить scenario ${scenario.name}`}
+        aria-label={`Запустить сценарий ${scenario.name}`}
       >
-        {running ? <RefreshCcw size={16} className="spin" /> : <Play size={16} fill="currentColor" />}
+        {running ? <RefreshCcw size={16} className="spin" aria-hidden="true" /> : <Play size={16} fill="currentColor" aria-hidden="true" />}
       </Button>
     </article>
   );
 }
 
-function IncidentDetailPanel({
-  incident,
-  isLoading,
-  role,
-  onStatus,
-  statusBusy
-}: {
-  incident?: IncidentDetail;
-  isLoading: boolean;
-  role: RoleMode;
-  onStatus: (id: string, status: IncidentStatus) => void;
-  statusBusy: boolean;
-}) {
-  if (isLoading) {
-    return (
-      <section className="ops-panel incident-detail skeleton-panel">
-        <RefreshCcw className="spin" size={20} />
-        <p>Загружаем incident details...</p>
-      </section>
-    );
-  }
-
-  if (!incident) {
-    return (
-      <section className="ops-panel incident-detail">
-        <EmptyState
-          title="Нет активных инцидентов"
-          description="Запустите demo сценарий, чтобы увидеть AI-сводку, hypothesis и evidence."
-        />
-      </section>
-    );
-  }
-
-  const analysis = incident.analysis;
-  const copy = roleCopy[role];
-  const latestDeploy = incident.deploys[0];
-
-  return (
-    <section className="ops-panel incident-detail">
-      <div className="incident-header">
-        <div>
-          <span className="eyebrow">Incident details</span>
-          <h2>{incident.title}</h2>
-          <p>{incident.serviceName} · обнаружен {formatClock(incident.detectedAt)}</p>
-        </div>
-        <div className="incident-header__badges">
-          <StatusPill tone={incident.severity}>{incident.severity}</StatusPill>
-          <StatusPill tone={incident.status}>{statusLabel(incident.status)}</StatusPill>
-          {incident.confidence ? <StatusPill tone={incident.confidence}>{confidenceLabel(incident.confidence)}</StatusPill> : null}
-        </div>
-      </div>
-
-      <IncidentActions incident={incident} disabled={statusBusy} onStatus={onStatus} />
-
-      <div className="analysis-grid">
-        <article className="analysis-card primary">
-          <Sparkles size={18} />
-          <h3>AI summary</h3>
-          <p>{analysis?.summary ?? incident.summary ?? "AI summary пока не сформирована."}</p>
-        </article>
-        <article className="analysis-card">
-          <ShieldAlert size={18} />
-          <h3>Root-cause hypothesis</h3>
-          <p>{analysis?.hypothesis ?? incident.hypothesis ?? "Недостаточно context для hypothesis."}</p>
-        </article>
-        <article className="analysis-card">
-          <GitBranch size={18} />
-          <h3>Deploy correlation</h3>
-          {latestDeploy ? (
-            <p>
-              Последний Deployment: {latestDeploy.version} · {latestDeploy.branch} · {formatClock(latestDeploy.timestamp)}
-            </p>
-          ) : (
-            <p>Deployment context отсутствует. Проверьте Logs и Metrics вручную.</p>
-          )}
-        </article>
-      </div>
-
-      <div className="role-guidance">
-        <div>
-          <span className="eyebrow">{copy.title}</span>
-          <p>{copy.hint}</p>
-        </div>
-        <ul>
-          {(analysis?.nextStep ? [analysis.nextStep, ...copy.actions] : copy.actions).slice(0, 4).map((action) => (
-            <li key={action}>
-              <CheckCircle2 size={15} />
-              {action}
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <div className="evidence-section">
-        <div className="section-heading compact">
-          <h3>Evidence</h3>
-          <p>Explainability: Metrics, Logs и Deployment context, которые поддерживают hypothesis.</p>
-        </div>
-        <div className="evidence-list">
-          {(analysis?.evidence ?? []).map((item) => (
-            <article key={item.id} className="evidence-card">
-              <StatusPill tone={item.kind === "deploy" ? "adapter" : item.kind === "metric" ? "healthy" : "mock"}>{item.kind}</StatusPill>
-              <strong>{item.title}</strong>
-              <p>{item.quote}</p>
-              <small>weight {Math.round(item.weight * 100)}%</small>
-            </article>
-          ))}
-          {!analysis?.evidence?.length ? (
-            <p className="muted-copy">Evidence появится после запуска demo scenario или ручного анализа.</p>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="timeline-grid">
-        <article>
-          <h3>Metrics</h3>
-          {incident.metrics.map((metric) => (
-            <div key={metric.id} className="timeline-row">
-              <Clock3 size={14} />
-              <span>{formatClock(metric.timestamp)}</span>
-              <strong>{metric.name}</strong>
-              <em>{metric.value} {metric.unit}</em>
-            </div>
-          ))}
-        </article>
-        <article>
-          <h3>Logs</h3>
-          {incident.logs.map((log) => (
-            <div key={log.id} className="timeline-row">
-              <StatusPill tone={log.level === "error" ? "critical" : "warning"}>{log.level}</StatusPill>
-              <strong>{log.message}</strong>
-            </div>
-          ))}
-        </article>
-      </div>
-    </section>
-  );
-}
-
 export function DashboardPage() {
   const queryClient = useQueryClient();
+  const workspace = useIncidentWorkspace();
   const [search, setSearch] = useState("");
   const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null);
-  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
   const [runningScenarioId, setRunningScenarioId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
-  const [role, setRole] = useState<RoleMode>(() => {
-    if (typeof window === "undefined") return "on-call";
-    return window.localStorage.getItem(ROLE_KEY) === "escalation" ? "escalation" : "on-call";
-  });
-  const [guideOpen, setGuideOpen] = useState(() => {
-    if (typeof window === "undefined") return true;
-    return window.localStorage.getItem(GUIDE_KEY) !== "false";
-  });
 
   const scenariosQuery = useQuery({ queryKey: ["scenarios"], queryFn: api.scenarios });
   const incidentsQuery = useQuery({ queryKey: ["incidents"], queryFn: api.incidents });
@@ -344,24 +99,13 @@ export function DashboardPage() {
 
   useEffect(() => {
     const firstIncident = incidents[0];
-    if (!selectedIncidentId && firstIncident) {
-      setSelectedIncidentId(firstIncident.id);
+    if (!workspace.selectedIncidentId && firstIncident) {
+      workspace.setSelectedIncidentId(firstIncident.id);
     }
-  }, [incidents, selectedIncidentId]);
+  }, [incidents, workspace]);
 
-  useEffect(() => {
-    window.localStorage.setItem(ROLE_KEY, role);
-  }, [role]);
-
-  useEffect(() => {
-    window.localStorage.setItem(GUIDE_KEY, String(guideOpen));
-  }, [guideOpen]);
-
-  const selectedIncidentQuery = useQuery({
-    queryKey: ["incident", selectedIncidentId],
-    queryFn: () => api.incident(selectedIncidentId!),
-    enabled: Boolean(selectedIncidentId)
-  });
+  const selectedIncident = incidents.find((incident) => incident.id === workspace.selectedIncidentId) ?? incidents[0];
+  const trendData = workspace.trend.length ? workspace.trend : incidents.length ? [buildTrendPoint(incidents, "сейчас")] : [];
 
   const runScenarioMutation = useMutation({
     mutationFn: async (scenarioId: string) => {
@@ -372,29 +116,26 @@ export function DashboardPage() {
     onSuccess: (response) => {
       queryClient.setQueryData(["incident", response.incident.id], response.incident);
       void queryClient.invalidateQueries({ queryKey: ["incidents"] });
-      setSelectedIncidentId(response.incident.id);
-      setStatusMessage("Demo scenario выполнен: incident создан и проанализирован");
+      workspace.setSelectedIncidentId(response.incident.id);
+      const nextIncidents = [response.incident, ...incidents.filter((incident) => incident.id !== response.incident.id)];
+      workspace.appendTrend(nextIncidents);
+      setStatusMessage("Демонстрационный сценарий выполнен: инцидент создан и проанализирован");
     },
-    onError: () => {
-      setStatusMessage("Не удалось запустить scenario. Проверьте API.");
-    },
-    onSettled: () => {
-      setRunningScenarioId(null);
-    }
+    onError: () => setStatusMessage("Не удалось запустить сценарий. Проверьте API."),
+    onSettled: () => setRunningScenarioId(null)
   });
 
   const resetMutation = useMutation({
     mutationFn: api.resetDemo,
     onSuccess: (response) => {
-      setSelectedIncidentId(null);
+      workspace.setSelectedIncidentId(null);
+      workspace.resetTrend();
       setSelectedScenarioId(null);
-      setStatusMessage(response.incidentsCleared > 0 ? "Данные обновлены, incidents очищены" : "Данные обновлены");
+      setStatusMessage(response.incidentsCleared > 0 ? "Данные обновлены, инциденты очищены" : "Данные обновлены");
       void queryClient.invalidateQueries({ queryKey: ["incidents"] });
       void queryClient.invalidateQueries({ queryKey: ["integrations"] });
     },
-    onError: () => {
-      setStatusMessage("Не удалось обновить данные.");
-    }
+    onError: () => setStatusMessage("Не удалось обновить данные.")
   });
 
   const statusMutation = useMutation({
@@ -402,7 +143,8 @@ export function DashboardPage() {
     onSuccess: (incident) => {
       queryClient.setQueryData(["incident", incident.id], incident);
       void queryClient.invalidateQueries({ queryKey: ["incidents"] });
-      setStatusMessage(`Incident: ${actionLabel(incident.status)}`);
+      workspace.appendTrend(incidents.map((item) => item.id === incident.id ? incident : item));
+      setStatusMessage(`Инцидент: ${actionLabel(incident.status)}`);
     }
   });
 
@@ -417,14 +159,14 @@ export function DashboardPage() {
     if (!query) return;
     const incident = filteredIncidents[0];
     if (incident) {
-      setSelectedIncidentId(incident.id);
-      setStatusMessage("Найденный incident открыт");
+      workspace.setSelectedIncidentId(incident.id);
+      setStatusMessage("Найденный инцидент выбран");
       return;
     }
     const scenario = filteredScenarios[0];
     if (scenario) {
       setSelectedScenarioId(scenario.id);
-      setStatusMessage("Найденный scenario выбран");
+      setStatusMessage("Найденный сценарий выбран");
       return;
     }
     setStatusMessage("Ничего не найдено. Измените запрос или фильтры.");
@@ -435,37 +177,42 @@ export function DashboardPage() {
   };
 
   return (
-    <div className="dashboard-page">
+    <div className="dashboard-page dashboard-page--overview">
       <section className="dashboard-toolbar">
-        <AnimatedGlowingSearchBar value={search} onChange={setSearch} onSubmit={submitSearch} />
+        <AnimatedGlowingSearchBar
+          value={search}
+          onChange={setSearch}
+          onSubmit={submitSearch}
+          placeholder="Искать инцидент или сервис..."
+        />
         <div className="role-switch-inline" aria-label="Переключить роль">
-          <button type="button" className={role === "on-call" ? "active" : ""} onClick={() => setRole("on-call")}>On-call</button>
-          <button type="button" className={role === "escalation" ? "active" : ""} onClick={() => setRole("escalation")}>Escalation</button>
+          <button type="button" className={workspace.role === "on-call" ? "active" : ""} onClick={() => workspace.setRole("on-call")}>Дежурный инженер</button>
+          <button type="button" className={workspace.role === "escalation" ? "active" : ""} onClick={() => workspace.setRole("escalation")}>Эскалация</button>
         </div>
         <Button type="button" variant="outline" disabled={resetMutation.isPending} onClick={() => resetMutation.mutate()}>
-          <RefreshCcw size={16} className={resetMutation.isPending ? "spin" : ""} />
+          <RefreshCcw size={16} className={resetMutation.isPending ? "spin" : ""} aria-hidden="true" />
           Обновить
         </Button>
       </section>
 
       {statusMessage ? (
-        <div className="inline-status" role="status">
-          <Info size={16} />
+        <div className="inline-status" role="status" aria-live="polite">
+          <Info size={16} aria-hidden="true" />
           {statusMessage}
         </div>
       ) : null}
 
-      <section className={`onboarding-card ${guideOpen ? "" : "collapsed"}`}>
+      <section className={`onboarding-card ${workspace.guideOpen ? "" : "collapsed"}`}>
         <div className="panel-heading compact">
           <div>
             <h2>Как пользоваться Triage AI</h2>
-            <p>mock mode использует synthetic data: это демонстрация end-to-end triage flow без production secrets.</p>
+            <p>Тестовый режим использует синтетические данные: это демонстрация полного цикла разбора без production secrets.</p>
           </div>
-          <Button type="button" variant="ghost" onClick={() => setGuideOpen((value) => !value)}>
-            {guideOpen ? "Скрыть инструкцию" : "Показать инструкцию"}
+          <Button type="button" variant="ghost" onClick={() => workspace.setGuideOpen(!workspace.guideOpen)}>
+            {workspace.guideOpen ? "Скрыть инструкцию" : "Показать инструкцию"}
           </Button>
         </div>
-        {guideOpen ? (
+        {workspace.guideOpen ? (
           <>
             <div className="guide-grid">
               {guideSteps.map(([title, text], index) => (
@@ -477,19 +224,25 @@ export function DashboardPage() {
               ))}
             </div>
             <p className="guide-note">
-              Confidence показывает надежность hypothesis. Low confidence fallback означает, что signal неполный:
-              проверьте evidence вручную или отправьте incident в escalation.
+              Уверенность показывает надёжность гипотезы причины. Низкая уверенность означает, что сигнал неполный:
+              проверьте подтверждающие данные вручную или отправьте инцидент на эскалацию.
             </p>
           </>
         ) : null}
       </section>
 
-      <div className="dashboard-grid">
+      <section className="metrics-strip">
+        <MetricCard label="Активные критичные" value={metrics.criticalActive} caption="не закрыты" icon={<AlertTriangle size={18} />} />
+        <MetricCard label="Проанализировано ИИ" value={metrics.analyzed} caption="есть сводка и гипотеза" icon={<Sparkles size={18} />} />
+        <MetricCard label="Низкая уверенность" value={metrics.lowConfidence} caption="нужна ручная проверка" icon={<ShieldAlert size={18} />} />
+      </section>
+
+      <div className="dashboard-overview-grid">
         <section className="ops-panel scenario-panel">
           <div className="panel-heading">
             <div>
-              <h2>Demo сценарии</h2>
-              <p>Запустите synthetic Prometheus/ELK сценарии end-to-end.</p>
+              <h2>Демонстрационные сценарии</h2>
+              <p>Запустите синтетические сценарии Prometheus/ELK и посмотрите полный цикл разбора.</p>
             </div>
           </div>
           <div className="scenario-list">
@@ -512,51 +265,101 @@ export function DashboardPage() {
           </div>
         </section>
 
-        <section className="metrics-strip">
-          <MetricCard label="Критичные активные" value={metrics.criticalActive} caption="status не resolved" icon={<AlertTriangle size={18} />} />
-          <MetricCard label="Проанализировано AI" value={metrics.analyzed} caption="incidents с AI summary" icon={<Sparkles size={18} />} />
-          <MetricCard label="Низкая confidence" value={metrics.lowConfidence} caption="нужна ручная проверка" icon={<ShieldAlert size={18} />} />
-        </section>
+        <aside className="dashboard-insight-column">
+          <section className="ops-panel last-incident-card">
+            <div className="panel-heading compact">
+              <div>
+                <h2>Последний инцидент</h2>
+                <p>Краткий статус и переход к полному анализу.</p>
+              </div>
+            </div>
+            {selectedIncident ? (
+              <div className="last-incident-card__body">
+                <div>
+                  <strong>{selectedIncident.title}</strong>
+                  <p>{selectedIncident.serviceName} · {formatClock(selectedIncident.detectedAt)}</p>
+                </div>
+                <div className="incident-row__badges">
+                  <StatusPill tone={selectedIncident.severity}>{severityLabel(selectedIncident.severity)}</StatusPill>
+                  <StatusPill tone={selectedIncident.status}>{statusLabel(selectedIncident.status)}</StatusPill>
+                  {selectedIncident.confidence ? <StatusPill tone={selectedIncident.confidence}>{confidenceLabel(selectedIncident.confidence)}</StatusPill> : null}
+                </div>
+                <IncidentActions incident={selectedIncident} disabled={statusMutation.isPending} onStatus={onStatus} />
+                <Button asChild>
+                  <Link to={`/incidents/${selectedIncident.id}`}>
+                    Открыть анализ инцидентов
+                    <ArrowRight size={16} aria-hidden="true" />
+                  </Link>
+                </Button>
+              </div>
+            ) : (
+              <EmptyState
+                title="Нет активных инцидентов"
+                description="Запустите демонстрационный сценарий, чтобы увидеть сводку и перейти к анализу."
+              />
+            )}
+          </section>
+          <section className="ops-panel pilot-kpi-card">
+            <div>
+              <span className="eyebrow">Гипотезы пилота, не доказанный эффект</span>
+              <h2>Что измеряем на пилоте</h2>
+              <p>Эти показатели проверяют, сокращает ли Triage AI путь от alert до рабочей гипотезы.</p>
+            </div>
+            <div className="pilot-kpi-list">
+              {pilotMetrics.map((metric) => (
+                <article key={metric.label}>
+                  <strong>{metric.label}</strong>
+                  <span>{metric.value}</span>
+                  <p>{metric.caption}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+          <IncidentTrendChart data={trendData} compact />
+        </aside>
 
         <section className="ops-panel incident-queue">
           <div className="panel-heading">
             <div>
               <h2>Очередь инцидентов</h2>
-              <p>Общий контекст для on-call и escalation roles.</p>
+              <p>Общий контекст для дежурного инженера и эскалации.</p>
             </div>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/incidents">Все инциденты</Link>
+            </Button>
           </div>
-          <div className="incident-list">
-            {filteredIncidents.map((incident) => (
-              <article key={incident.id} className={`incident-row ${selectedIncidentId === incident.id ? "active" : ""}`}>
-                <button type="button" className="incident-row__main" onClick={() => setSelectedIncidentId(incident.id)}>
+          <div className="incident-list compact">
+            {filteredIncidents.slice(0, 4).map((incident) => (
+              <article key={incident.id} className={`incident-row ${workspace.selectedIncidentId === incident.id ? "active" : ""}`}>
+                <button type="button" className="incident-row__main" onClick={() => workspace.setSelectedIncidentId(incident.id)}>
                   <span>
                     <strong>{incident.title}</strong>
                     <small>{incident.serviceName} · {formatClock(incident.detectedAt)}</small>
                   </span>
                   <span className="incident-row__badges">
-                    <StatusPill tone={incident.severity}>{incident.severity}</StatusPill>
+                    <StatusPill tone={incident.severity}>{severityLabel(incident.severity)}</StatusPill>
                     <StatusPill tone={incident.status}>{statusLabel(incident.status)}</StatusPill>
                   </span>
                 </button>
-                <IncidentActions incident={incident} disabled={statusMutation.isPending} onStatus={onStatus} />
               </article>
             ))}
             {!filteredIncidents.length ? (
               <EmptyState
                 title={incidents.length ? "Ничего не найдено" : "Нет активных инцидентов"}
-                description={incidents.length ? "Измените запрос или фильтры и попробуйте снова." : "Запустите demo сценарий, чтобы увидеть AI-сводку, hypothesis и evidence."}
+                description={incidents.length ? "Измените запрос или фильтры и попробуйте снова." : "Запустите демонстрационный сценарий, чтобы увидеть сводку, гипотезу причины и подтверждающие данные."}
               />
             ) : null}
           </div>
         </section>
 
-        <IncidentDetailPanel
-          incident={selectedIncidentQuery.data}
-          isLoading={selectedIncidentQuery.isFetching}
-          role={role}
-          onStatus={onStatus}
-          statusBusy={statusMutation.isPending}
-        />
+        <section className="ops-panel role-summary-card">
+          <Activity size={20} aria-hidden="true" />
+          <div>
+            <span className="eyebrow">{roleCopy[workspace.role].title}</span>
+            <h2>Рекомендации меняются по роли</h2>
+            <p>{roleCopy[workspace.role].hint}</p>
+          </div>
+        </section>
       </div>
     </div>
   );

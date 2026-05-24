@@ -4,16 +4,16 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
-import { AuthProvider, DEMO_EMAIL } from "../auth/AuthProvider";
+import { AuthProvider, TEST_EMAIL } from "../auth/AuthProvider";
 
 const SESSION_KEY = "triage-ai-session";
 
 const scenario = {
   id: "release-regression-5xx",
-  name: "Release regression: HTTP 5xx spike",
+  name: "Регрессия после релиза: всплеск HTTP 5xx",
   incidentType: "Регрессия после релиза",
   serviceName: "payment-svc",
-  description: "payment-svc starts returning 7.3% HTTP 5xx after deploy.",
+  description: "payment-svc начинает возвращать 7,3% HTTP 5xx после развертывания.",
   recommended: true
 };
 
@@ -21,9 +21,9 @@ const integration = {
   kind: "prometheus",
   enabled: true,
   mode: "mock",
-  displayName: "Prometheus metrics",
+  displayName: "Метрики Prometheus",
   status: "healthy",
-  description: "Mock Prometheus-compatible Metrics ingestion для demo scenarios.",
+  description: "Тестовый Prometheus-compatible ingestion метрик для демонстрационных сценариев.",
   lastCheck: "2026-05-23T09:42:00.000Z",
   samplePayload: { source: "prometheus", metric: "http_5xx_rate" },
   productionRequirements: ["Prometheus endpoint", "read-only API Token"]
@@ -32,15 +32,15 @@ const integration = {
 function incident(status = "active") {
   return {
     id: "inc-1",
-    title: "HTTP 5xx spike on payment-svc",
+    title: "Всплеск HTTP 5xx в payment-svc",
     serviceName: "payment-svc",
     severity: "critical",
     status,
     startedAt: "2026-05-23T09:38:00.000Z",
     detectedAt: "2026-05-23T09:42:00.000Z",
     scenarioId: "release-regression-5xx",
-    summary: "payment-svc показывает рост HTTP 5xx после Release.",
-    hypothesis: "Вероятная root-cause hypothesis — regression в feat/retry-logic-v2.",
+    summary: "payment-svc показывает рост HTTP 5xx после релиза.",
+    hypothesis: "Вероятная гипотеза причины — регрессия в feat/retry-logic-v2.",
     confidence: "high",
     metrics: [
       { id: "m1", timestamp: "2026-05-23T09:42:00.000Z", serviceName: "payment-svc", name: "http_5xx_rate", value: 0.073, unit: "ratio", labels: {} }
@@ -49,17 +49,17 @@ function incident(status = "active") {
       { id: "l1", timestamp: "2026-05-23T09:42:00.000Z", serviceName: "payment-svc", level: "error", message: "RetryBudgetExceeded", source: "elk" }
     ],
     deploys: [
-      { id: "d1", timestamp: "2026-05-23T09:38:00.000Z", serviceName: "payment-svc", version: "rc.18", branch: "feat/retry-logic-v2", commitSha: "a81f3c9", author: "payments-team", summary: "Changed retry policy" }
+      { id: "d1", timestamp: "2026-05-23T09:38:00.000Z", serviceName: "payment-svc", version: "rc.18", branch: "feat/retry-logic-v2", commitSha: "a81f3c9", author: "payments-team", summary: "Изменена retry policy" }
     ],
     analysis: {
-      summary: "payment-svc показывает резкий рост HTTP 5xx после недавнего Release.",
+      summary: "payment-svc показывает резкий рост HTTP 5xx после недавнего релиза.",
       affectedServices: ["payment-svc"],
-      hypothesis: "Вероятная root-cause hypothesis — regression в feat/retry-logic-v2.",
+      hypothesis: "Вероятная гипотеза причины — регрессия в feat/retry-logic-v2.",
       confidence: "high",
       reasoning: ["metric", "deploy"],
       nextStep: "Проверьте Deployment diff и выполните rollback.",
       evidence: [
-        { id: "ev1", kind: "deploy", refId: "d1", title: "Recent deploy correlation", quote: "feat/retry-logic-v2", weight: 0.9 }
+        { id: "ev1", kind: "deploy", refId: "d1", title: "Связь с недавним развертыванием", quote: "feat/retry-logic-v2", weight: 0.9 }
       ]
     }
   };
@@ -84,8 +84,8 @@ function incidentList(status = "active") {
 
 function signIn() {
   window.localStorage.setItem(SESSION_KEY, JSON.stringify({
-    email: DEMO_EMAIL,
-    name: "Demo user",
+    email: TEST_EMAIL,
+    name: "Тестовый пользователь",
     createdAt: "2026-05-23T09:00:00.000Z"
   }));
 }
@@ -139,7 +139,7 @@ describe("Triage AI MVP", () => {
           incident: incident(status),
           notification: {
             channel: "telegram",
-            text: "AI summary готова",
+            text: "сводка ИИ готова",
             deepLink: "/incidents/inc-1"
           }
         });
@@ -171,58 +171,72 @@ describe("Triage AI MVP", () => {
     }));
   });
 
-  it("redirects unauthenticated users from Dashboard to login", async () => {
-    renderApp("/dashboard");
+  it("redirects unauthenticated users from protected routes to login", async () => {
+    renderApp("/incidents");
 
     expect(await screen.findByText("Вход в Triage AI")).toBeInTheDocument();
   });
 
-  it("logs in with demo credentials and opens Dashboard", async () => {
+  it("logs in with test credentials and opens the dashboard", async () => {
     renderApp("/login");
     const user = userEvent.setup();
 
     await user.click(screen.getByRole("button", { name: "Войти" }));
 
-    expect(await screen.findByText("Консоль triage инцидентов")).toBeInTheDocument();
+    expect(await screen.findByText("Панель разбора инцидентов")).toBeInTheDocument();
   });
 
-  it("runs a demo scenario and updates incident status", async () => {
+  it("runs a demonstration scenario, updates chart, and changes incident status", async () => {
     signIn();
     renderApp("/dashboard");
     const user = userEvent.setup();
 
-    await screen.findByText("Release regression: HTTP 5xx spike");
-    await user.click(screen.getByRole("button", { name: /Запустить scenario Release regression/i }));
+    await screen.findByText("Регрессия после релиза: всплеск HTTP 5xx");
+    await user.click(screen.getByRole("button", { name: /Запустить сценарий Регрессия после релиза/i }));
+
+    expect(await screen.findByText(/Демонстрационный сценарий выполнен/i)).toBeInTheDocument();
+    await user.click(await screen.findByRole("link", { name: /Открыть анализ инцидентов/i }));
 
     expect(await screen.findByText(/payment-svc показывает резкий рост HTTP 5xx/i)).toBeInTheDocument();
-    expect(await screen.findByText("Recent deploy correlation")).toBeInTheDocument();
+    expect((await screen.findAllByText("Связь с недавним развертыванием")).length).toBeGreaterThan(0);
+    expect(screen.getByText("AI-ассистент")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Объяснить гипотезу/i }).length).toBeGreaterThan(0);
 
     await user.click(screen.getAllByRole("button", { name: /Принять в работу/i })[0]!);
 
     await waitFor(() => {
-      expect(screen.getByText("Incident: Принят в работу")).toBeInTheDocument();
+      expect(screen.getByText("Инцидент: Принят в работу")).toBeInTheDocument();
     });
   });
 
-  it("opens integration details and tests mock connection", async () => {
+  it("opens integration details and tests connection", async () => {
     signIn();
     renderApp("/integrations");
     const user = userEvent.setup();
 
-    expect((await screen.findAllByText("Prometheus metrics")).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("Метрики Prometheus")).length).toBeGreaterThan(0);
     await user.click(screen.getAllByRole("button", { name: /Проверить/i })[0]!);
 
-    expect(await screen.findByText("Mock connection проверен, status обновлен")).toBeInTheDocument();
+    expect(await screen.findByText("Тестовое подключение проверено, статус обновлён")).toBeInTheDocument();
   });
 
-  it("filters documentation sections with docs search", async () => {
-    signIn();
+  it("renders public documentation and filters sections", async () => {
     renderApp("/docs");
     const user = userEvent.setup();
 
-    await user.type(screen.getByLabelText("Поиск"), "low");
+    expect((await screen.findAllByText("Документация")).length).toBeGreaterThan(0);
+    expect(screen.getByRole("img", { name: "Triage AI" })).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Поиск"), "низкая");
 
-    expect(screen.getAllByText("Demo scenarios").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Демонстрационные сценарии").length).toBeGreaterThan(0);
     expect(screen.queryByText("Войдите в личный кабинет.")).not.toBeInTheDocument();
+  });
+
+  it("renders app documentation inside protected shell", async () => {
+    signIn();
+    renderApp("/app/docs");
+
+    expect(await screen.findByText("Справочник по Triage AI внутри личного кабинета.")).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Основная навигация" })).toBeInTheDocument();
   });
 });

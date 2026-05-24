@@ -1,4 +1,5 @@
 import {
+  Activity,
   BookOpenText,
   Boxes,
   Gauge,
@@ -9,37 +10,59 @@ import {
 } from "lucide-react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
+import { BrandLogo } from "@/components/BrandLogo";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
+import { IncidentWorkspaceProvider } from "@/features/incidents/incident-workspace";
 
 const navItems = [
-  { to: "/dashboard", label: "Dashboard", icon: Gauge },
+  { to: "/dashboard", label: "Панель управления", icon: Gauge },
+  { to: "/incidents", label: "Инциденты", icon: Activity },
   { to: "/integrations", label: "Интеграции", icon: Boxes },
-  { to: "/docs", label: "Документация", icon: BookOpenText },
+  { to: "/app/docs", label: "Документация", icon: BookOpenText },
   { to: "/settings", label: "Настройки", icon: Settings }
 ];
 
 function pageMeta(pathname: string) {
+  if (/^\/incidents\/[^/]+/.test(pathname)) {
+    return {
+      title: "Рабочая область инцидента",
+      description: "AI-сводка, объяснение выводов, подтверждающие данные, хронология и действия по выбранному инциденту.",
+      breadcrumb: "Инциденты"
+    };
+  }
   if (pathname.startsWith("/integrations")) {
     return {
       title: "Интеграции",
-      description: "Границы адаптеров видны: mock mode позволяет запускать demo без secrets."
-    };
-  }
-  if (pathname.startsWith("/docs")) {
-    return {
-      title: "Документация",
-      description: "Как читать AI summary, evidence, confidence и demo scenarios."
+      description: "Источники сигналов и каналы уведомлений в тестовом режиме без реальных secrets.",
+      breadcrumb: "Интеграции"
     };
   }
   if (pathname.startsWith("/settings")) {
     return {
       title: "Настройки",
-      description: "Demo user, role defaults, theme и mock mode status."
+      description: "Профиль тестового пользователя, роль по умолчанию, тема и статус тестового режима.",
+      breadcrumb: "Настройки"
+    };
+  }
+  if (pathname.startsWith("/app/docs")) {
+    return {
+      title: "Документация",
+      description: "Справочник по Triage AI внутри личного кабинета.",
+      breadcrumb: "Документация"
+    };
+  }
+  if (pathname.startsWith("/incidents")) {
+    return {
+      title: "Анализ инцидентов",
+      description: "Динамика, контекст, подтверждающие данные и рекомендуемые действия.",
+      breadcrumb: "Инциденты"
     };
   }
   return {
-    title: "Консоль triage инцидентов",
-    description: "MVP для incident response: auto-summary, root-cause hypothesis, deploy correlation и explainability."
+    title: "Панель разбора инцидентов",
+    description: "MVP для incident response: автоматическая сводка, гипотеза причины, связь с развертыванием и объяснение выводов.",
+    breadcrumb: "Панель управления"
   };
 }
 
@@ -52,13 +75,7 @@ export function AppShell() {
   return (
     <div className="app-shell">
       <aside className="side-nav">
-        <NavLink className="brand-block" to="/dashboard" aria-label="Открыть Dashboard">
-          <div className="brand-mark">T</div>
-          <div>
-            <strong>Triage AI</strong>
-            <span>Cloud.ru MVP</span>
-          </div>
-        </NavLink>
+        <BrandLogo to="/dashboard" variant="markWithText" className="side-nav__brand" label="Открыть панель управления" />
 
         <nav className="nav-list" aria-label="Основная навигация">
           {navItems.map((item) => {
@@ -77,7 +94,7 @@ export function AppShell() {
             <UserCircle size={18} />
           </div>
           <div>
-            <strong>{session?.name ?? "Demo user"}</strong>
+            <strong>{session?.name ?? "Тестовый пользователь"}</strong>
             <span>{session?.email}</span>
           </div>
         </div>
@@ -85,7 +102,7 @@ export function AppShell() {
         <div className="sidebar-footer">
           <div className="mock-callout compact">
             <Shield size={16} />
-            <span>mock mode: synthetic data, без production secrets</span>
+            <span>Тестовый режим: синтетические данные, без production secrets</span>
           </div>
           <button className="sidebar-action" type="button" onClick={() => navigate("/settings")}>
             <Settings size={16} />
@@ -108,14 +125,21 @@ export function AppShell() {
       <main className="workspace">
         <header className="top-bar">
           <div>
+            <Breadcrumb items={[{ label: meta.breadcrumb }]} />
             <h1>{meta.title}</h1>
             <p>{meta.description}</p>
           </div>
           <div className="top-bar__actions">
+            <span className="top-bar__mode">
+              <Shield size={14} aria-hidden="true" />
+              Тестовый режим
+            </span>
             <AnimatedThemeToggler />
           </div>
         </header>
-        <Outlet />
+        <IncidentWorkspaceProvider>
+          <Outlet />
+        </IncidentWorkspaceProvider>
       </main>
     </div>
   );

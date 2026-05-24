@@ -1,4 +1,4 @@
-import type { Confidence, Severity } from "@coursework/shared";
+import type { Confidence, Severity } from "@triage-ai/shared";
 import type { ReactNode } from "react";
 
 type StatusPillProps = {

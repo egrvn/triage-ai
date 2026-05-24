@@ -1,210 +1,134 @@
-# Triage AI для incident response
+# Triage AI
 
-Triage AI — курсовой MVP для кейса Cloud.ru: интерактивная DevOps/SRE-консоль, которая помогает on-call и escalation-командам быстрее проводить triage инцидентов. Приложение связывает synthetic Prometheus Metrics, ELK Logs, Deployment context и mock AI analysis в одном Dashboard.
+Triage AI — русскоязычная MVP-консоль для быстрого разбора инцидентов в DevOps/SRE-командах. Приложение собирает синтетические сигналы из Prometheus/ELK, формирует сводку ИИ, показывает гипотезу причины, подтверждающие данные и помогает дежурному инженеру выбрать следующий шаг.
 
-## Что реализовано
-
-- Публичная landing page на `/`.
-- Mock auth и страница входа `/login`.
-- Защищенный личный кабинет:
-  - `/dashboard` — рабочая консоль triage;
-  - `/integrations` — mock integrations и adapter boundaries;
-  - `/docs` — продуктовая документация на русском;
-  - `/settings` — demo user, роль, theme и mock mode status.
-- Demo scenarios создают incidents, AI summary, root-cause hypothesis, evidence и recommended next steps.
-- Incident actions: `Принять в работу`, `Эскалировать`, `Закрыть`.
-- Role switch `On-call / Escalation` меняет подсказки и recommended actions.
-- Amber/orange theme, light/dark mode, responsive layout.
-- Fastify API, shared Zod contracts, Prisma/PostgreSQL и memory mode для локального demo.
+MVP работает в тестовом режиме: реальные secrets не используются, внешние AI providers не подключаются, интеграции имитируют production boundaries.
 
 ## Стек
 
-- Node.js 20+
-- React 19 + Vite + TypeScript
-- React Router
-- TanStack Query
-- Fastify + Zod
-- PostgreSQL + Prisma
-- Docker / Docker Compose
-
-Tailwind в проект не добавлялся: тема реализована через CSS variables и обычные CSS-классы, чтобы не делать лишнюю миграцию стилей.
+- React 19, Vite, TypeScript, React Router.
+- Fastify API, Zod shared contracts.
+- Prisma с PostgreSQL для Docker/production-подобного режима.
+- Memory repository для локального запуска без БД.
+- Recharts для графика динамики инцидентов.
+- Vanilla CSS с mint/green CSS variables, light/dark theme через `.dark`.
 
 ## Быстрый запуск
 
 ```bash
 npm install
 cp .env.example .env
-npm run db:generate
 npm run dev
 ```
 
-Открыть:
+После запуска:
 
-- Web UI: `http://localhost:5173`
-- API health: `http://localhost:4000/api/health`
+- Web: `http://localhost:5173`
+- API: `http://localhost:4000/api/health`
 
-По умолчанию используется `STORAGE_MODE=memory`, поэтому PostgreSQL не нужен для локального demo.
+По умолчанию используется `STORAGE_MODE=memory`, поэтому PostgreSQL не нужен для локальной демонстрации.
 
-## Demo credentials
+## Тестовый доступ
 
 - Email: `demo@triage.ai`
 - Пароль: `demo1234`
 
-Это transparent mock auth для MVP. Он хранит session state в `localStorage` под ключом `triage-ai-session`, не использует JWT и не является production security.
+Это transparent mock auth для MVP. Сессия хранится в `localStorage` под ключом `triage-ai-session`, JWT не используется, production security не имитируется.
 
 ## Routes
 
-- `/` — публичная landing page.
+- `/` — публичная посадочная страница.
 - `/login` — вход в личный кабинет.
-- `/dashboard` — защищенная triage-консоль.
-- `/integrations` — защищенный раздел интеграций.
-- `/docs` — защищенная документация.
-- `/settings` — защищенные настройки.
+- `/docs` — публичная документация продукта.
+- `/dashboard` — защищённая панель разбора инцидентов.
+- `/incidents` — защищённый список инцидентов, фильтры, график и логи.
+- `/incidents/:id` — главная рабочая область инцидента: AI-сводка, evidence, хронология, Copilot и действия.
+- `/integrations` — защищённые интеграции.
+- `/app/docs` — документация внутри личного кабинета.
+- `/settings` — защищённые настройки тестового пользователя.
 
-Неавторизованный пользователь при открытии закрытых routes перенаправляется на `/login`.
-
-## Demo flow
+## Как пользоваться сценариями
 
 1. Откройте `/login`.
-2. Войдите с demo credentials.
-3. В Dashboard выберите demo scenario.
-4. Нажмите play.
-5. Проверьте созданный incident:
-   - AI summary;
-   - root-cause hypothesis;
-   - confidence;
-   - deploy correlation;
-   - evidence;
-   - recommended next steps.
-6. Переключите роль `On-call / Escalation` и сравните подсказки.
-7. Выполните action: `Принять в работу`, `Эскалировать` или `Закрыть`.
-8. Откройте `/integrations`, проверьте details и нажмите `Проверить`.
+2. Войдите через тестовый доступ.
+3. Перейдите в панель управления.
+4. Выберите демонстрационный сценарий.
+5. Нажмите кнопку запуска.
+6. Проверьте созданный инцидент: сводку ИИ, гипотезу причины, подтверждающие данные и рекомендуемые действия.
+7. Примите инцидент в работу, отправьте на эскалацию или закройте.
+8. Переключите роль `Дежурный инженер / Эскалация` и сравните подсказки.
 
-## Demo scenarios
+Доступные сценарии:
 
-- `Release regression: HTTP 5xx spike`
-- `Latency degradation under load`
-- `External API timeout`
-- `Sparse signal: low confidence fallback`
+- Регрессия после релиза: всплеск HTTP 5xx.
+- Рост задержки под нагрузкой.
+- Тайм-аут внешнего API.
+- Неполный сигнал и низкая уверенность.
 
-Сценарии используют synthetic data и нужны для демонстрации end-to-end triage flow без real customer data и secrets.
+## Интеграции
 
-## Mock integrations
+В MVP доступны карточки:
 
-Доступны карточки:
+- Метрики Prometheus.
+- Логи ELK.
+- Оповещения Telegram.
+- Оповещения Slack.
+- Email-оповещения.
+- Провайдер анализа ИИ.
 
-- Prometheus metrics;
-- ELK logs;
-- Telegram alerts;
-- Slack alerts;
-- Email alerts;
-- AI analysis provider.
+Включённые интеграции работают в тестовом режиме. Отключённые показывают, какие endpoint, credentials, Webhook/API Token и secrets management потребуются для production.
 
-Enabled integrations работают в `mock / healthy` режиме. Disabled integrations показывают production requirements: endpoint, credentials, Webhook/API Token и secrets management. Реальные secrets в код не добавляются.
+### Провайдеры ИИ
 
-## API
+В MVP включён тестовый provider на rules-based анализе. YandexGPT, GigaChat, OpenAI и Custom endpoint показаны как production-ready границы подключения и требуют backend env или secrets manager. Frontend не принимает и не хранит API-ключи.
 
-- `GET /api/health`
-- `GET /api/scenarios`
-- `POST /api/scenarios/:id/run`
-- `GET /api/incidents`
-- `GET /api/incidents/:id`
-- `POST /api/incidents/:id/analyze`
-- `PATCH /api/incidents/:id/status`
-- `POST /api/incidents/:id/feedback`
-- `GET /api/settings/integrations`
-- `PATCH /api/settings/integrations`
-- `POST /api/settings/integrations/:kind/test`
-- `POST /api/demo/reset`
-- `POST /api/ingest/alerts`
-- `POST /api/ingest/metrics`
-- `POST /api/ingest/logs`
-- `POST /api/ingest/deploys`
+## Сценарий демонстрации MVP на защите
 
-API paths, enum values и technical identifiers остаются на английском.
+1. Открыть landing page и показать ценность Triage AI.
+2. Войти через `demo@triage.ai` / `demo1234`.
+3. На панели управления запустить сценарий `Регрессия после релиза: всплеск HTTP 5xx`.
+4. Открыть созданный `/incidents/:id`.
+5. Показать AI-сводку, гипотезу, confidence и хронологию.
+6. Нажать `Объяснить гипотезу` и показать evidence refs.
+7. Спросить AI-ассистента `Что проверить первым?`.
+8. Показать связь с развертыванием, ключевые логи и метрики.
+9. Скопировать сводку для эскалации.
+10. Открыть Интеграции и показать провайдеров ИИ.
 
-## PostgreSQL локально
+## Scripts
 
-```bash
-docker compose up -d postgres
-cp .env.example .env
-# В .env установите STORAGE_MODE=postgres
-npm run db:generate
-npm run db:deploy
-npm run db:seed
-npm run dev
-```
+- `npm run dev` — запустить API и web dev server.
+- `npm run build` — собрать shared, API и web.
+- `npm run start` — запустить production API, который также отдаёт web build.
+- `npm test` — запустить тесты API и web.
+- `npm run lint` — ESLint по репозиторию.
+- `npm run typecheck` — TypeScript checks для всех workspaces.
+- `npm run db:generate` — Prisma client generation.
+- `npm run db:migrate` — локальная Prisma migration.
+- `npm run db:deploy` — production migration deploy.
+- `npm run db:seed` — seed тестовых данных.
 
 ## Docker
 
 ```bash
-npm install
-npm run build
 docker compose up --build
 ```
 
-Открыть `http://localhost:8080`.
-
-## Scripts
-
-- `npm run dev` — API и web dev servers.
-- `npm run build` — shared, API и web production build.
-- `npm run start` — production API/server.
-- `npm test` — API и web tests.
-- `npm run lint` — ESLint.
-- `npm run typecheck` — TypeScript checks.
-- `npm run db:generate` — Prisma Client.
-- `npm run db:deploy` — Prisma migrations deploy.
-- `npm run db:seed` — seed demo data.
-
-## Cloud.ru deployment outline
-
-1. Создать Cloud.ru project и registry.
-2. Создать Managed PostgreSQL и задать `DATABASE_URL`.
-3. Собрать Linux amd64 image:
-
-```bash
-docker buildx build --platform linux/amd64 -t <cloud-registry>/coursework/triage-ai:latest .
-```
-
-4. Запушить image в Artifact Registry.
-5. Deploy в Cloud.ru Container Apps с переменными:
-   - `PORT=8080`
-   - `HOST=0.0.0.0`
-   - `NODE_ENV=production`
-   - `STORAGE_MODE=postgres`
-   - `DATABASE_URL=<managed-postgres-url>`
-   - `CORS_ORIGIN=<frontend-or-service-origin>`
-6. Выполнить миграции как deploy step:
-
-```bash
-npm run db:deploy
-npm run db:seed
-```
-
-7. Health check: `/api/health`.
-
-## Проверки качества
-
-```bash
-npm run lint
-npm run typecheck
-npm test
-npm run build
-```
-
-GitHub Actions запускает тот же quality gate на push/PR.
+Приложение будет доступно на `http://localhost:8080`. Docker Compose поднимает PostgreSQL и запускает Prisma migrations перед стартом API.
 
 ## Ограничения MVP
 
-- Mock auth не защищает production environment.
-- Real Prometheus/ELK/Telegram/Slack/Email integrations не подключены.
-- AI provider rules-based/mock, без внешних OpenAI/cloud LLM keys.
-- RBAC, SSO, audit log, multitenancy и secrets management нужны как production follow-up.
-- Auto-remediation отсутствует: AI остается human-in-the-loop.
+- Авторизация тестовая и не заменяет production auth.
+- Данные синтетические.
+- ИИ-анализ rules-based, без внешних LLM keys.
+- Secrets management не реализован внутри приложения.
+- RBAC, audit log, SSO, real adapters и observability требуют отдельного production этапа.
 
-## Документация
+## Production follow-ups
 
-- [Продуктовая документация](docs/README.md)
-- [Nikita implementation plan](docs/NIKITA_IMPLEMENTATION_PLAN.md)
-- [Nikita implementation report](docs/NIKITA_IMPLEMENTATION_REPORT.md)
+- Подключить реальные Prometheus/ELK источники.
+- Добавить backend auth, RBAC и SSO.
+- Настроить secrets management на инфраструктуре заказчика.
+- Добавить audit log действий.
+- Подключить production AI provider с политиками обработки данных.
+- Добавить deployment pipeline и runtime monitoring.

@@ -1,89 +1,129 @@
-# Продуктовая документация Triage AI
+# Документация Triage AI
 
-## Обзор
+Triage AI — MVP-консоль для incident response. Она помогает дежурному инженеру и команде эскалации быстрее собрать контекст, получить сводку ИИ, сформировать гипотезу причины и проверить подтверждающие данные.
 
-Triage AI — MVP-консоль для incident response. Она помогает on-call и escalation-командам быстрее собрать context, получить auto-summary, сформировать root-cause hypothesis и проверить evidence.
-
-MVP работает в mock mode: данные synthetic, real secrets не используются, интеграции показывают adapter boundaries и production requirements.
+Приложение работает в тестовом режиме: данные синтетические, реальные secrets не используются, интеграции показывают границы будущих production adapters.
 
 ## Быстрый старт
 
-1. Откройте `/login`.
-2. Войдите с `demo@triage.ai` / `demo1234`.
-3. Перейдите в Dashboard.
-4. Выберите demo scenario.
-5. Нажмите play.
-6. Откройте созданный incident.
-7. Проверьте AI summary, evidence и recommended next steps.
-8. Примите incident в работу, эскалируйте или закройте.
+1. Запустите проект: `npm install && npm run dev`.
+2. Откройте `http://localhost:5173`.
+3. Перейдите на страницу входа.
+4. Используйте тестовый доступ: `demo@triage.ai` / `demo1234`.
+5. Откройте панель управления.
+6. Запустите демонстрационный сценарий.
+7. Откройте `/incidents/:id` и проверьте сводку ИИ, гипотезу причины, подтверждающие данные, хронологию и рекомендуемые действия.
 
-## Как работает triage
+## Как работает разбор инцидентов
 
-1. Signals поступают из Prometheus/ELK/mock adapters.
-2. Система нормализует события.
-3. Correlation engine связывает Logs, Metrics и Deployment context.
-4. AI analysis provider формирует summary и hypothesis.
-5. Confidence score показывает надежность вывода.
-6. Low confidence fallback включается, когда данных недостаточно.
+1. Сигналы поступают из Prometheus/ELK или тестовых adapters.
+2. Система нормализует события и связывает их с сервисом.
+3. Correlation logic сопоставляет логи, метрики и контекст развертывания.
+4. Провайдер анализа ИИ формирует сводку, гипотезу причины и уровень уверенности.
+5. Дежурный инженер или эскалация получают контекст и выбирают действие.
 
-## Demo scenarios
+## Incident Workspace
 
-| Scenario | Affected service | Input signals | Expected AI summary | Likely hypothesis | Recommended action |
-| --- | --- | --- | --- | --- | --- |
-| Release regression: HTTP 5xx spike | payment-svc | HTTP 5xx spike, correlated Logs, Deployment | Рост 5xx после Release | regression в последнем Deployment | Проверить diff и выполнить rollback при подтверждении |
-| Latency degradation under load | catalog-svc | p95 latency, CPU pressure, queue depth | Деградация latency под нагрузкой | resource saturation / queue backlog | Проверить capacity, workers и autoscaling |
-| External API timeout | checkout-svc | external API errors, timeout Logs | Checkout деградирует из-за dependency | loyalty-api outage или latency spike | Включить fallback и уведомить owning team |
-| Sparse signal: low confidence fallback | profile-svc | неполный Alert, минимум Logs/Metrics | Недостаточно context | нет уверенной root cause | Собрать дополнительные signals или escalation |
+`/incidents/:id` — главный экран демонстрации MVP. Он показывает:
+
+- заголовок инцидента, сервис, критичность, статус и confidence;
+- AI-сводку и гипотезу причины;
+- объяснение, почему система так считает;
+- метрики, логи, deploy events и подтверждающие данные;
+- хронологию событий;
+- действия: принять в работу, эскалировать, закрыть, отметить неверную гипотезу, скопировать сводку.
+
+## AI-ассистент и evidence-first подход
+
+AI-ассистент не является общим чатом. Он работает только с текущим incident context и отвечает через evidence refs, logs, metrics и deploy events.
+
+Если confidence низкая или данных недостаточно, ассистент не должен выдумывать root cause. Он обязан сказать, что сигналов недостаточно для уверенной гипотезы, и предложить ручные проверки.
+
+## Демонстрационные сценарии
+
+| Сценарий | Сервис | Сигналы | Ожидаемый вывод | Действие |
+| --- | --- | --- | --- | --- |
+| Регрессия после релиза: всплеск HTTP 5xx | payment-svc | HTTP 5xx, логи ошибок, недавнее развертывание | Вероятная регрессия последнего релиза | Проверить diff и выполнить rollback при подтверждении |
+| Рост задержки под нагрузкой | catalog-svc | p95 latency, CPU pressure, queue depth | Деградация производительности под нагрузкой | Проверить capacity и масштабирование workers |
+| Тайм-аут внешнего API | checkout-svc | timeout logs, circuit breaker, external API error rate | Проблема upstream API | Включить fallback и проверить circuit breaker |
+| Неполный сигнал и низкая уверенность | profile-svc | одно оповещение, мало логов и метрик | Нужен ручной анализ | Собрать дополнительные данные или отправить на эскалацию |
 
 ## Интеграции
 
-| Integration | Назначение | Режим MVP | Production needs |
+| Интеграция | Назначение | Режим MVP | Для production |
 | --- | --- | --- | --- |
-| Prometheus metrics | Metrics и SLO signals | mock / healthy | endpoint, read-only API Token, alert rules |
-| ELK logs | Logs, trace id, error context | mock / healthy | endpoint, index pattern, service account |
-| Telegram alerts | On-call notifications | mock / healthy | bot Token, chat id, notification policy |
-| Slack alerts | Team incident notifications | disabled | Slack app, Webhook URL, workspace approval |
-| Email alerts | Email fallback | disabled | SMTP endpoint, sender identity, recipient groups |
-| AI analysis provider | auto-summary, hypothesis, confidence | mock / healthy | approved provider, API key, data policy |
+| Метрики Prometheus | Метрики и SLO-сигналы | тестовый режим | endpoint, read-only API Token, alert rules |
+| Логи ELK | Логи, trace id, контекст ошибок | тестовый режим | endpoint, index pattern, service account |
+| Оповещения Telegram | Уведомления дежурному инженеру | тестовый режим | bot Token, chat id, notification policy |
+| Оповещения Slack | Командные уведомления | отключено | Slack app, Webhook URL, workspace approval |
+| Email-оповещения | Fallback-канал уведомлений | отключено | SMTP endpoint, sender identity, recipient groups |
+| Провайдер анализа ИИ | Сводка, гипотеза причины, уверенность | тестовый режим | approved provider, API key, data policy |
+
+## Провайдеры ИИ
+
+- `Тестовый provider` — активен по умолчанию и не делает внешних вызовов.
+- `YandexGPT`, `GigaChat`, `OpenAI`, `Custom endpoint` — показывают production boundary и возвращают `нужна настройка`, если backend env или secrets manager не настроены.
+- Frontend не принимает и не хранит API-ключи.
+
+## Метрики пилота
+
+Это гипотезы пилота, не доказанный эффект:
+
+- Time to Hypothesis: 30–60 мин → 5–15 мин.
+- Переключения между инструментами: 5–8 → 1–2.
+- RCA Coverage: 50–60% → 80–90%.
+- Adoption: ≥70%.
+
+Метрики проверяются на пилоте: Time to Hypothesis через A/B сравнение, RCA Coverage по post-incident документации, Adoption по логам продукта и опросам команды.
+
+## Сценарий демонстрации MVP на защите
+
+1. Открыть landing.
+2. Войти через тестовый доступ.
+3. Запустить сценарий `Регрессия после релиза`.
+4. Открыть `/incidents/:id`.
+5. Показать AI-сводку, гипотезу, confidence и хронологию.
+6. Нажать `Объяснить гипотезу`.
+7. Спросить AI-ассистента `Что проверить первым?`.
+8. Показать deploy correlation, логи и evidence.
+9. Скопировать сводку для эскалации.
+10. Показать провайдеров ИИ в Интеграциях.
 
 ## Роли
 
-On-call view фокусируется на impact, affected service и ближайшем безопасном действии: принять incident, проверить service, подготовить rollback или escalation.
+`Дежурный инженер` фокусируется на impact, affected service и ближайшем безопасном действии: принять инцидент, проверить сервис, подготовить rollback или отправить на эскалацию.
 
-Escalation view фокусируется на context handoff: timeline, evidence, confidence и качестве root-cause hypothesis.
+`Эскалация` фокусируется на качестве handoff-контекста: timeline, подтверждающие данные, уровень уверенности и полнота гипотезы причины.
 
 ## Статусы и метрики
 
-- `Critical active` — critical incidents, которые еще не resolved.
-- `AI analyzed` — incidents с AI summary и hypothesis.
-- `Low confidence` — scenarios, где signal неполный и нужна ручная проверка.
-- `active` — incident создан и ожидает реакции.
-- `acknowledged` — incident принят в работу.
-- `escalated` — incident передан в escalation.
-- `resolved` — incident закрыт.
+- `Активные критичные` — critical incidents, которые ещё не закрыты.
+- `Проанализировано ИИ` — инциденты со сводкой и гипотезой причины.
+- `Низкая уверенность` — случаи, где сигнал неполный и нужна ручная проверка.
+- `В работе / Закрыт / Эскалирован` — жизненный цикл инцидента в MVP.
 
 ## FAQ
 
-### Почему данные mock?
+### Почему данные тестовые?
 
-Курсовой MVP должен запускаться без customer data, real endpoints и secrets. Synthetic data позволяет показать end-to-end flow на защите.
+MVP должен запускаться без реальных secrets и customer data, поэтому использует синтетические сигналы.
 
 ### Можно ли подключить реальные Prometheus/ELK?
 
-Да. Для этого нужны production adapters, network allowlist, credentials и secrets management.
+Да. Для production нужны adapters, сетевые разрешения, сервисные аккаунты и secrets management.
 
-### Что означает low confidence?
+### Что означает низкая уверенность?
 
-Система не уверена в hypothesis, потому что signal неполный или evidence слабая. В таком случае AI не должен выдумывать уверенную root cause.
+Система не уверена в гипотезе причины, потому что сигнал неполный или подтверждающие данные слабые. В таком случае ИИ не должен выдумывать уверенный вывод.
 
-### Заменяет ли AI инженера?
+### Заменяет ли ИИ инженера?
 
-Нет. AI ускоряет сбор context, но mitigation decision остается за on-call или escalation.
+Нет. ИИ ускоряет сбор контекста, но решение остаётся за дежурным инженером или эскалацией.
 
 ### Где хранятся secrets?
 
-В MVP secrets не хранятся. Для production нужен внешний secrets management и политика доступа.
+В MVP реальные secrets не хранятся. Для production нужен внешний secrets management.
 
-### Как перейти от MVP к production?
+### Что нужно для production версии?
 
-Добавить real data sources, backend auth/RBAC, audit log, secrets management, observability, rate limits и Cloud.ru deployment pipeline.
+Real data sources, production auth, RBAC, audit log, observability, deployment pipeline и правила работы с secrets.

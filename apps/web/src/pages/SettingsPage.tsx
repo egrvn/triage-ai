@@ -46,12 +46,12 @@ export function SettingsPage() {
           <div className="settings-card__icon">
             <UserCircle size={22} />
           </div>
-          <h2>Demo user</h2>
-          <p>Mock auth session хранится в localStorage и не является production security.</p>
+          <h2>Тестовый пользователь</h2>
+          <p>Тестовая сессия хранится в localStorage и не является production security.</p>
           <dl>
             <div><dt>Email</dt><dd>{session?.email}</dd></div>
             <div><dt>Имя</dt><dd>{session?.name}</dd></div>
-            <div><dt>Session</dt><dd>{session?.createdAt ? new Date(session.createdAt).toLocaleString("ru-RU") : "активна"}</dd></div>
+            <div><dt>Сессия</dt><dd>{session?.createdAt ? new Date(session.createdAt).toLocaleString("ru-RU") : "активна"}</dd></div>
           </dl>
         </article>
 
@@ -60,10 +60,10 @@ export function SettingsPage() {
             <ShieldCheck size={22} />
           </div>
           <h2>Роль по умолчанию</h2>
-          <p>Role switch влияет на подсказки и recommended next steps в Dashboard.</p>
+          <p>Переключатель роли влияет на подсказки и рекомендуемые действия в панели управления.</p>
           <div className="segmented-control">
-            <button type="button" className={role === "on-call" ? "active" : ""} onClick={() => setRole("on-call")}>On-call</button>
-            <button type="button" className={role === "escalation" ? "active" : ""} onClick={() => setRole("escalation")}>Escalation</button>
+            <button type="button" className={role === "on-call" ? "active" : ""} onClick={() => setRole("on-call")}>Дежурный инженер</button>
+            <button type="button" className={role === "escalation" ? "active" : ""} onClick={() => setRole("escalation")}>Эскалация</button>
           </div>
         </article>
 
@@ -71,7 +71,7 @@ export function SettingsPage() {
           <div className="settings-card__icon">
             <CheckCircle2 size={22} />
           </div>
-          <h2>Theme</h2>
+          <h2>Тема</h2>
           <p>Переключатель меняет `.dark` на documentElement и сохраняет выбор.</p>
           <div className="settings-row">
             <span>Текущий режим: {theme}</span>
@@ -83,11 +83,11 @@ export function SettingsPage() {
           <div className="settings-card__icon">
             <Info size={22} />
           </div>
-          <h2>mock mode status</h2>
-          <p>Real adapters и secrets management отключены для защиты demo и reproducible запуска.</p>
+          <h2>Статус тестового режима</h2>
+          <p>Реальные adapters и secrets management отключены для безопасного воспроизводимого запуска.</p>
           <ul className="settings-list">
-            <li><CheckCircle2 size={15} />Synthetic Prometheus/ELK signals доступны</li>
-            <li><CheckCircle2 size={15} />AI provider работает rules-based без внешних keys</li>
+            <li><CheckCircle2 size={15} />Синтетические сигналы Prometheus/ELK доступны</li>
+            <li><CheckCircle2 size={15} />ИИ-провайдер работает на правилах без внешних keys</li>
             <li><CheckCircle2 size={15} />Secrets в коде не хранятся</li>
           </ul>
           <Button
@@ -95,7 +95,7 @@ export function SettingsPage() {
             variant="outline"
             onClick={() => {
               window.localStorage.removeItem(GUIDE_KEY);
-              setMessage("Инструкция Dashboard снова будет показана");
+              setMessage("Инструкция в панели управления снова будет показана");
             }}
           >
             Сбросить инструкцию

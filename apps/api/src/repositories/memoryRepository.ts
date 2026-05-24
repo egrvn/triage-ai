@@ -10,7 +10,7 @@ import type {
   ScenarioSummary,
   UpdateIncidentStatus,
   UpdateIntegrationSetting
-} from "@coursework/shared";
+} from "@triage-ai/shared";
 import { scenarioFixtures } from "../data/scenarios.js";
 import { defaultIntegrationSettings } from "./defaultSettings.js";
 import type { IncidentRepository } from "./types.js";

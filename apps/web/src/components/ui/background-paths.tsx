@@ -19,12 +19,12 @@ const paths = Array.from({ length: 18 }, (_, index) => ({
 }));
 
 export function BackgroundPaths({
-  title = "AI-консоль для triage инцидентов",
-  subtitle = "Связывайте Alerts, Logs, Metrics и Deployments в одном Dashboard для быстрого incident response.",
+  title = "Панель для быстрого разбора инцидентов",
+  subtitle = "Связывайте логи, метрики, оповещения и развертывания в одном рабочем контексте.",
   primaryTo = "/login",
-  secondaryHref = "#demo-scenarios",
+  secondaryHref = "#scenarios",
   primaryLabel = "Войти в кабинет",
-  secondaryLabel = "Посмотреть demo"
+  secondaryLabel = "Посмотреть сценарии"
 }: BackgroundPathsProps) {
   return (
     <section className="background-paths">
@@ -32,9 +32,9 @@ export function BackgroundPaths({
         <svg viewBox="0 0 1200 520" preserveAspectRatio="none">
           <defs>
             <linearGradient id="pathGradient" x1="0" x2="1" y1="0" y2="1">
-              <stop offset="0%" stopColor="#fde68a" />
-              <stop offset="45%" stopColor="#f59e0b" />
-              <stop offset="100%" stopColor="#92400e" />
+              <stop offset="0%" stopColor="var(--chart-1)" />
+              <stop offset="45%" stopColor="var(--primary)" />
+              <stop offset="100%" stopColor="var(--chart-5)" />
             </linearGradient>
           </defs>
           {paths.map((path) => (

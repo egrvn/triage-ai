@@ -1,7 +1,8 @@
 import { ArrowLeft, LockKeyhole } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
-import { DEMO_EMAIL, DEMO_PASSWORD, useAuth } from "@/auth/AuthProvider";
+import { TEST_EMAIL, TEST_PASSWORD, useAuth } from "@/auth/AuthProvider";
+import { BrandLogo } from "@/components/BrandLogo";
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import { Button } from "@/components/ui/button";
 
@@ -9,8 +10,8 @@ export function LoginPage() {
   const { isAuthenticated, login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [email, setEmail] = useState(DEMO_EMAIL);
-  const [password, setPassword] = useState(DEMO_PASSWORD);
+  const [email, setEmail] = useState(TEST_EMAIL);
+  const [password, setPassword] = useState(TEST_PASSWORD);
   const [error, setError] = useState("");
   const [isSubmitting, setSubmitting] = useState(false);
 
@@ -39,22 +40,17 @@ export function LoginPage() {
   return (
     <div className="login-page">
       <header className="login-page__header">
-        <Link className="brand-block" to="/">
-          <div className="brand-mark">T</div>
-          <div>
-            <strong>Triage AI</strong>
-            <span>DevOps Control Center</span>
-          </div>
-        </Link>
+        <BrandLogo to="/" variant="horizontal" />
         <AnimatedThemeToggler />
       </header>
 
       <main className="login-card">
+        <BrandLogo variant="mark" className="login-card__brand" />
         <div className="login-card__icon">
           <LockKeyhole size={22} />
         </div>
         <h1>Вход в Triage AI</h1>
-        <p>Откройте личный кабинет для анализа инцидентов.</p>
+        <p>Откройте личный кабинет для разбора инцидентов.</p>
 
         <form onSubmit={submit} className="form-stack">
           <label>
@@ -73,11 +69,11 @@ export function LoginPage() {
           </Button>
         </form>
 
-        <div className="demo-credentials">
-          <strong>Demo-доступ</strong>
-          <span>Email: {DEMO_EMAIL}</span>
-          <span>Пароль: {DEMO_PASSWORD}</span>
-          <small>Это mock auth для MVP. Production security здесь не имитируется.</small>
+        <div className="test-credentials">
+          <strong>Тестовый доступ</strong>
+          <span>Email: {TEST_EMAIL}</span>
+          <span>Пароль: {TEST_PASSWORD}</span>
+          <small>Это прозрачный тестовый вход для MVP. Production security здесь не имитируется.</small>
         </div>
 
         <Button asChild variant="ghost">

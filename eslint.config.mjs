@@ -10,6 +10,7 @@ export default [
       "apps/web/dist/**",
       "apps/api/dist/**",
       "tmp/**",
+      "triage_ai_site_assets/**",
       "apps/web/vite.config.ts",
       "apps/api/prisma/seed.ts"
     ]

@@ -16,7 +16,7 @@ import {
   type ScenarioSummary,
   type TestIntegrationResponse,
   type UpdateIntegrationSetting
-} from "@coursework/shared";
+} from "@triage-ai/shared";
 import { z } from "zod";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";

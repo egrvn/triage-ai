@@ -1,5 +1,5 @@
 {
-  "name": "@coursework/api",
+  "name": "@triage-ai/api",
   "version": "0.1.0",
   "type": "module",
   "main": "dist/server.js",
@@ -11,7 +11,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@coursework/shared": "file:../../packages/shared",
+    "@triage-ai/shared": "file:../../packages/shared",
     "@fastify/cors": "^11.0.1",
     "@fastify/static": "^8.2.0",
     "@prisma/client": "^6.8.2",

@@ -1,4 +1,4 @@
-import type { DeployEvent, LogEvent, MetricPoint, ScenarioSummary, Severity } from "@coursework/shared";
+import type { DeployEvent, LogEvent, MetricPoint, ScenarioSummary, Severity } from "@triage-ai/shared";
 
 export type ScenarioFixture = ScenarioSummary & {
   alert: {
@@ -18,13 +18,13 @@ const iso = (minute: string) => `${base}${minute}:00.000Z`;
 export const scenarioFixtures: ScenarioFixture[] = [
   {
     id: "release-regression-5xx",
-    name: "Release regression: HTTP 5xx spike",
+    name: "Регрессия после релиза: всплеск HTTP 5xx",
     incidentType: "Регрессия после релиза",
     serviceName: "payment-svc",
-    description: "payment-svc starts returning 7.3% HTTP 5xx four minutes after feat/retry-logic-v2 deployment.",
+    description: "payment-svc начинает возвращать 7,3% HTTP 5xx через четыре минуты после развертывания feat/retry-logic-v2.",
     recommended: true,
     alert: {
-      title: "HTTP 5xx spike on payment-svc",
+      title: "Всплеск HTTP 5xx в payment-svc",
       severity: "critical",
       startedAt: iso("38"),
       detectedAt: iso("42")
@@ -41,19 +41,19 @@ export const scenarioFixtures: ScenarioFixture[] = [
       { id: "l-rel-3", timestamp: iso("42"), serviceName: "gateway-svc", level: "warn", message: "payment-svc error ratio breached SLO burn threshold", traceId: "trc-pay-7842", source: "elk" }
     ],
     deploys: [
-      { id: "d-rel-1", timestamp: iso("38"), serviceName: "payment-svc", version: "2026.05.23-rc.18", branch: "feat/retry-logic-v2", commitSha: "a81f3c9", author: "payments-team", summary: "Changed retry policy and provider timeout handling" },
-      { id: "d-rel-2", timestamp: iso("08"), serviceName: "gateway-svc", version: "2026.05.23-rc.07", branch: "main", commitSha: "bb204ac", author: "platform-team", summary: "Header propagation cleanup" }
+      { id: "d-rel-1", timestamp: iso("38"), serviceName: "payment-svc", version: "2026.05.23-rc.18", branch: "feat/retry-logic-v2", commitSha: "a81f3c9", author: "payments-team", summary: "Изменена политика повторов и обработка timeout у провайдера" },
+      { id: "d-rel-2", timestamp: iso("08"), serviceName: "gateway-svc", version: "2026.05.23-rc.07", branch: "main", commitSha: "bb204ac", author: "platform-team", summary: "Очистка передачи заголовков" }
     ]
   },
   {
     id: "latency-under-load",
-    name: "Latency degradation under load",
+    name: "Рост задержки под нагрузкой",
     incidentType: "Падение производительности под нагрузкой",
     serviceName: "catalog-svc",
-    description: "High p95 latency, CPU pressure, and queue growth during peak traffic without a clear release trigger.",
+    description: "Высокая p95 latency, рост нагрузки на CPU и очередь во время пикового трафика без явного релизного триггера.",
     recommended: true,
     alert: {
-      title: "p95 latency breached on catalog-svc",
+      title: "Превышение p95 latency в catalog-svc",
       severity: "warning",
       startedAt: iso("15"),
       detectedAt: iso("20")
@@ -69,18 +69,18 @@ export const scenarioFixtures: ScenarioFixture[] = [
       { id: "l-lat-2", timestamp: iso("20"), serviceName: "catalog-svc", level: "warn", message: "Worker queue search-index backlog is growing", traceId: "trc-cat-1143", source: "elk" }
     ],
     deploys: [
-      { id: "d-lat-1", timestamp: iso("01"), serviceName: "catalog-svc", version: "2026.05.23-rc.03", branch: "main", commitSha: "92cd11e", author: "catalog-team", summary: "Static asset cache headers" }
+      { id: "d-lat-1", timestamp: iso("01"), serviceName: "catalog-svc", version: "2026.05.23-rc.03", branch: "main", commitSha: "92cd11e", author: "catalog-team", summary: "Заголовки кеширования статических ресурсов" }
     ]
   },
   {
     id: "external-api-timeout",
-    name: "External API timeout",
+    name: "Тайм-аут внешнего API",
     incidentType: "Проблемы интеграций",
     serviceName: "checkout-svc",
-    description: "Checkout requests degrade because an external loyalty API times out.",
+    description: "Запросы checkout деградируют из-за timeout внешнего loyalty API.",
     recommended: false,
     alert: {
-      title: "Checkout dependency timeout",
+      title: "Timeout зависимости checkout",
       severity: "critical",
       startedAt: iso("25"),
       detectedAt: iso("27")
@@ -94,18 +94,18 @@ export const scenarioFixtures: ScenarioFixture[] = [
       { id: "l-ext-2", timestamp: iso("27"), serviceName: "checkout-svc", level: "error", message: "Circuit breaker open for loyalty-api", traceId: "trc-chk-5502", source: "elk" }
     ],
     deploys: [
-      { id: "d-ext-1", timestamp: iso("04"), serviceName: "checkout-svc", version: "2026.05.23-rc.04", branch: "main", commitSha: "f4bb901", author: "checkout-team", summary: "Cart validation copy update" }
+      { id: "d-ext-1", timestamp: iso("04"), serviceName: "checkout-svc", version: "2026.05.23-rc.04", branch: "main", commitSha: "f4bb901", author: "checkout-team", summary: "Обновление текста валидации корзины" }
     ]
   },
   {
     id: "low-confidence-sparse-data",
-    name: "Sparse signal: low confidence fallback",
-    incidentType: "Edge case: недостаточно контекста",
+    name: "Неполный сигнал и низкая уверенность",
+    incidentType: "Недостаточно контекста",
     serviceName: "profile-svc",
-    description: "Alert exists, but the available metrics/logs do not support a confident root-cause hypothesis.",
+    description: "Оповещение есть, но доступные метрики и логи не подтверждают уверенную гипотезу причины.",
     recommended: false,
     alert: {
-      title: "profile-svc intermittent errors",
+      title: "Периодические ошибки profile-svc",
       severity: "warning",
       startedAt: iso("50"),
       detectedAt: iso("55")

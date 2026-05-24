@@ -1,4 +1,4 @@
-import type { Confidence, IncidentStatus, Severity } from "@coursework/shared";
+import type { Confidence, IncidentStatus, Severity } from "@triage-ai/shared";
 
 export function formatClock(value: string) {
   return new Intl.DateTimeFormat("ru-RU", {
@@ -22,21 +22,21 @@ export function formatDateTime(value?: string) {
 }
 
 export function confidenceLabel(confidence?: Confidence) {
-  if (confidence === "high") return "Высокая confidence";
-  if (confidence === "medium") return "Средняя confidence";
-  if (confidence === "low") return "Низкая confidence";
+  if (confidence === "high") return "Высокая уверенность";
+  if (confidence === "medium") return "Средняя уверенность";
+  if (confidence === "low") return "Низкая уверенность";
   return "Ожидает анализа";
 }
 
 export function statusLabel(status: IncidentStatus) {
   if (status === "active") return "Активен";
   if (status === "acknowledged") return "В работе";
-  if (status === "escalated") return "Escalated";
+  if (status === "escalated") return "Эскалирован";
   return "Закрыт";
 }
 
 export function severityLabel(severity: Severity) {
-  if (severity === "critical") return "critical";
-  if (severity === "warning") return "warning";
-  return "info";
+  if (severity === "critical") return "Критичный";
+  if (severity === "warning") return "Предупреждение";
+  return "Информация";
 }

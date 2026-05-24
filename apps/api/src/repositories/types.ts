@@ -10,7 +10,7 @@ import type {
   ScenarioSummary,
   UpdateIncidentStatus,
   UpdateIntegrationSetting
-} from "@coursework/shared";
+} from "@triage-ai/shared";
 
 export interface IncidentRepository {
   listScenarios(): Promise<ScenarioSummary[]>;

@@ -14,7 +14,7 @@ export function AnimatedGlowingSearchBar({
   value,
   onChange,
   onSubmit,
-  placeholder = "Искать incident, service, Logs...",
+  placeholder = "Искать инцидент, сервис или логи...",
   className
 }: AnimatedGlowingSearchBarProps) {
   const [internalValue, setInternalValue] = useState("");

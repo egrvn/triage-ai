@@ -2,15 +2,15 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: coursework
-      POSTGRES_PASSWORD: coursework
-      POSTGRES_DB: coursework
+      POSTGRES_USER: triage
+      POSTGRES_PASSWORD: triage
+      POSTGRES_DB: triage_ai
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U coursework -d coursework"]
+      test: ["CMD-SHELL", "pg_isready -U triage -d triage_ai"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -24,7 +24,7 @@ services:
       PORT: 8080
       HOST: 0.0.0.0
       STORAGE_MODE: postgres
-      DATABASE_URL: postgresql://coursework:coursework@postgres:5432/coursework?schema=public
+      DATABASE_URL: postgresql://triage:triage@postgres:5432/triage_ai?schema=public
       CORS_ORIGIN: "*"
     ports:
       - "8080:8080"

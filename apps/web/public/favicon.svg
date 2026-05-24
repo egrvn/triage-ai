@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Triage AI</title>
+  <defs>
+    <linearGradient id="lineGradient" x1="76" y1="256" x2="432" y2="256" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#004b31"/>
+      <stop offset="1" stop-color="#006239"/>
+    </linearGradient>
+    <linearGradient id="mintGradient" x1="278" y1="180" x2="418" y2="336" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8cf0be"/>
+      <stop offset="0.55" stop-color="#72e3ad"/>
+      <stop offset="1" stop-color="#3dd18b"/>
+    </linearGradient>
+    <style>
+      .node { fill: #171717; }
+      .out { fill: #006239; }
+      @media (prefers-color-scheme: dark) {
+        .node { fill: #e2e8f0; }
+        .out { fill: #72e3ad; }
+      }
+    </style>
+  </defs>
+  <g fill="none" stroke="url(#lineGradient)" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M128 126H178C238 126 271 194 314 236"/>
+    <path d="M128 386H178C238 386 271 318 314 276"/>
+    <path d="M128 256H316"/>
+  </g>
+  <rect class="node" x="70" y="94" width="54" height="54" rx="13"/>
+  <rect class="node" x="70" y="229" width="54" height="54" rx="13"/>
+  <rect class="node" x="70" y="364" width="54" height="54" rx="13"/>
+  <path d="M281 180H350C364 180 375 187 383 199L421 244C428 253 428 263 421 272L383 317C375 329 364 336 350 336H281L343 256Z" fill="url(#mintGradient)"/>
+  <path class="out" d="M414 207C421 198 432 198 440 206L480 246C489 255 489 264 480 273L440 313C432 321 421 321 414 313C407 306 407 295 414 286L445 256L414 226C407 217 407 214 414 207Z"/>
+</svg>

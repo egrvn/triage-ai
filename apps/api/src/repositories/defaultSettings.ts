@@ -1,13 +1,13 @@
-import type { IntegrationSetting } from "@coursework/shared";
+import type { IntegrationSetting } from "@triage-ai/shared";
 
 export const defaultIntegrationSettings: IntegrationSetting[] = [
   {
     kind: "prometheus",
     enabled: true,
     mode: "mock",
-    displayName: "Prometheus metrics",
+    displayName: "Метрики Prometheus",
     status: "healthy",
-    description: "Mock Prometheus-compatible Metrics ingestion для demo scenarios.",
+    description: "Тестовый Prometheus-compatible ingestion метрик для демонстрационных сценариев.",
     lastCheck: "2026-05-23T09:42:00.000Z",
     samplePayload: {
       source: "prometheus",
@@ -22,9 +22,9 @@ export const defaultIntegrationSettings: IntegrationSetting[] = [
     kind: "elk",
     enabled: true,
     mode: "mock",
-    displayName: "ELK logs",
+    displayName: "Логи ELK",
     status: "healthy",
-    description: "Mock ELK-like Logs с service, timestamp, level и trace id.",
+    description: "Тестовые ELK-like логи с service, timestamp, level и trace id.",
     lastCheck: "2026-05-23T09:42:00.000Z",
     samplePayload: {
       source: "elk",
@@ -39,13 +39,13 @@ export const defaultIntegrationSettings: IntegrationSetting[] = [
     kind: "telegram",
     enabled: true,
     mode: "mock",
-    displayName: "Telegram alerts",
+    displayName: "Оповещения Telegram",
     status: "healthy",
-    description: "Mock Alerts для on-call уведомлений из scenario runner.",
+    description: "Тестовые оповещения для дежурного инженера из runner демонстрационных сценариев.",
     lastCheck: "2026-05-23T09:42:00.000Z",
     samplePayload: {
       channel: "telegram",
-      text: "[CRITICAL] HTTP 5xx spike on payment-svc",
+      text: "[CRITICAL] Всплеск HTTP 5xx в payment-svc",
       deepLink: "/dashboard"
     },
     productionRequirements: ["Telegram bot Token", "chat id", "notification policy", "secrets management"]
@@ -54,12 +54,12 @@ export const defaultIntegrationSettings: IntegrationSetting[] = [
     kind: "slack",
     enabled: false,
     mode: "disabled",
-    displayName: "Slack alerts",
+    displayName: "Оповещения Slack",
     status: "disabled",
-    description: "Adapter boundary для Slack-compatible incident notifications.",
+    description: "Граница адаптера для Slack-compatible уведомлений об инцидентах.",
     samplePayload: {
       channel: "slack",
-      blocks: ["incident title", "AI summary", "recommended next steps"]
+      blocks: ["название инцидента", "сводка ИИ", "рекомендуемые действия"]
     },
     productionRequirements: ["Slack app", "Webhook URL", "workspace approval", "secrets management"]
   },
@@ -67,12 +67,12 @@ export const defaultIntegrationSettings: IntegrationSetting[] = [
     kind: "email",
     enabled: false,
     mode: "disabled",
-    displayName: "Email alerts",
+    displayName: "Email-оповещения",
     status: "disabled",
-    description: "Adapter boundary для email incident notifications.",
+    description: "Граница адаптера для email-уведомлений об инцидентах.",
     samplePayload: {
       channel: "email",
-      subject: "Incident summary",
+      subject: "Сводка инцидента",
       recipients: ["on-call@example.com"]
     },
     productionRequirements: ["SMTP endpoint", "sender identity", "recipient groups", "secrets management"]
@@ -81,14 +81,14 @@ export const defaultIntegrationSettings: IntegrationSetting[] = [
     kind: "llm",
     enabled: true,
     mode: "mock",
-    displayName: "AI analysis provider",
+    displayName: "Провайдер анализа ИИ",
     status: "healthy",
-    description: "Deterministic rule-backed mock provider; cloud LLM keys optional для production adapter.",
+    description: "Детерминированный тестовый provider на правилах; ключи cloud LLM нужны только для production adapter.",
     lastCheck: "2026-05-23T09:42:00.000Z",
     samplePayload: {
-      provider: "mock",
-      input: ["Metrics", "Logs", "Deployment context"],
-      output: ["auto-summary", "root-cause hypothesis", "confidence"]
+      provider: "test-mode",
+      input: ["метрики", "логи", "контекст развертывания"],
+      output: ["сводка", "гипотеза причины", "уверенность"]
     },
     productionRequirements: ["approved AI provider", "API key", "data handling policy", "prompt/evaluation controls"]
   }

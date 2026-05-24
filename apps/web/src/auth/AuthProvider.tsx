@@ -1,17 +1,17 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 const SESSION_KEY = "triage-ai-session";
-export const DEMO_EMAIL = "demo@triage.ai";
-export const DEMO_PASSWORD = "demo1234";
+export const TEST_EMAIL = "demo@triage.ai";
+export const TEST_PASSWORD = "demo1234";
 
-export type DemoSession = {
+export type TestSession = {
   email: string;
   name: string;
   createdAt: string;
 };
 
 type AuthContextValue = {
-  session: DemoSession | null;
+  session: TestSession | null;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<{ ok: true } | { ok: false; message: string }>;
   logout: () => void;
@@ -19,14 +19,14 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function readSession(): DemoSession | null {
+function readSession(): TestSession | null {
   if (typeof window === "undefined") {
     return null;
   }
 
   try {
     const raw = window.localStorage.getItem(SESSION_KEY);
-    return raw ? (JSON.parse(raw) as DemoSession) : null;
+    return raw ? (JSON.parse(raw) as TestSession) : null;
   } catch {
     window.localStorage.removeItem(SESSION_KEY);
     return null;
@@ -34,7 +34,7 @@ function readSession(): DemoSession | null {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<DemoSession | null>(() => readSession());
+  const [session, setSession] = useState<TestSession | null>(() => readSession());
 
   useEffect(() => {
     setSession(readSession());
@@ -45,13 +45,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAuthenticated: Boolean(session),
     async login(email, password) {
       const normalizedEmail = email.trim().toLowerCase();
-      if (normalizedEmail !== DEMO_EMAIL || password !== DEMO_PASSWORD) {
-        return { ok: false, message: "Неверный email или пароль для demo-доступа." };
+      if (normalizedEmail !== TEST_EMAIL || password !== TEST_PASSWORD) {
+        return { ok: false, message: "Неверный email или пароль для тестового доступа." };
       }
 
-      const nextSession: DemoSession = {
+      const nextSession: TestSession = {
         email: normalizedEmail,
-        name: "Demo user",
+        name: "Тестовый пользователь",
         createdAt: new Date().toISOString()
       };
       window.localStorage.setItem(SESSION_KEY, JSON.stringify(nextSession));

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="280" viewBox="0 0 1120 280" fill="none" role="img" aria-label="Triage AI logo">
+  <defs>
+    <linearGradient id="mint" x1="117" y1="74" x2="196" y2="189" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#72E3AD"/>
+      <stop offset="1" stop-color="#4ADE80"/>
+    </linearGradient>
+    <linearGradient id="green" x1="40" y1="58" x2="230" y2="213" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#006239"/>
+      <stop offset="1" stop-color="#064E3B"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(28 30) scale(0.46)">
+    <rect x="64" y="100" width="42" height="42" rx="10" fill="#171717"/>
+    <rect x="64" y="235" width="42" height="42" rx="10" fill="#171717"/>
+    <rect x="64" y="370" width="42" height="42" rx="10" fill="#171717"/>
+    <path d="M132 121H178C214 121 226 160 248 190L302 256" stroke="url(#green)" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M132 391H178C214 391 226 352 248 322L302 256" stroke="url(#green)" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M132 256H290" stroke="url(#green)" stroke-width="28" stroke-linecap="round"/>
+    <path d="M244 166H338C358 166 369 177 379 194L418 256L379 318C369 335 358 346 338 346H244L304 256L244 166Z" fill="url(#mint)"/>
+    <path d="M430 207C439 198 454 198 463 207L498 240C508 249 508 263 498 272L463 305C454 314 439 314 430 305C421 296 421 282 430 273L453 256L430 239C421 230 421 216 430 207Z" fill="url(#green)"/>
+  </g>
+  <text x="300" y="178" fill="#171717" font-family="Outfit, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="114" font-weight="700" letter-spacing="0.02em">Triage AI</text>
+</svg>

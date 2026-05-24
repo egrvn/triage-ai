@@ -19,7 +19,7 @@ ENV PORT=8080
 COPY package.json package-lock.json* ./
 COPY apps/api/package.json apps/api/package.json
 COPY packages/shared/package.json packages/shared/package.json
-RUN npm install --omit=dev --workspace @coursework/api --workspace @coursework/shared
+RUN npm install --omit=dev --workspace @triage-ai/api --workspace @triage-ai/shared
 COPY --from=build /app/node_modules/.prisma node_modules/.prisma
 COPY --from=build /app/apps/api/dist apps/api/dist
 COPY --from=build /app/apps/api/prisma apps/api/prisma
