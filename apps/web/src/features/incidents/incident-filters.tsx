@@ -34,10 +34,10 @@ const levelOptions: Array<[LogLevelFilter, string]> = [
 
 const statusOptions: Array<[IncidentStatus | "all", string]> = [
   ["all", "Все"],
-  ["active", "Активен"],
-  ["acknowledged", "В работе"],
-  ["escalated", "Эскалирован"],
-  ["resolved", "Закрыт"]
+  ["new", "Новый"],
+  ["in_progress", "В работе"],
+  ["escalated", "На эскалации"],
+  ["closed", "Закрыт"]
 ];
 
 const severityOptions: Array<[Severity | "all", string]> = [
@@ -161,7 +161,7 @@ export function IncidentFilters({
       <div className="incident-filter-panel__header">
         <div>
           <span className="eyebrow">Фильтры</span>
-          <h2>Отбор инцидентов и логов</h2>
+          <h2>Расширенный отбор</h2>
           <p>Настройте выборку по сервису, уровню логов, статусу и периоду.</p>
         </div>
         <div className="incident-filter-panel__actions">

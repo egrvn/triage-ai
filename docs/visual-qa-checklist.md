@@ -34,6 +34,8 @@
 - В dark theme нет грубого контраста и гигантского белого текста.
 - На mobile кнопки и badges переносятся, а не выходят за контейнер.
 - В одной секции нет бессмысленного повторения одинаковых иконок.
+- Landing выглядит как зрелый AI-product: сильный hero, продуктовый preview, аккуратный falling pattern и без учебных формулировок.
+- App shell выглядит как рабочая cloud console: группы навигации, project/env selector, компактные панели.
 
 ## Антипаттерны
 
@@ -59,6 +61,7 @@ E2E_BASE_URL=http://localhost:4000 npm run test:e2e
 
 ```text
 test-results/visual-snapshots
+test-results/ui-redesign-screenshots
 ```
 
 Если тесты проходят, всё равно откройте screenshots вручную и проверьте:

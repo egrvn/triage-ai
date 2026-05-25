@@ -33,7 +33,7 @@ export const defaultIntegrationSettings: IntegrationSetting[] = [
       message: "RetryBudgetExceeded",
       traceId: "trc-pay-7842"
     },
-    productionRequirements: ["ELK endpoint", "index pattern", "service account", "secrets management"]
+    productionRequirements: ["ELK endpoint", "index pattern", "service account", "secrets manager"]
   },
   {
     kind: "telegram",
@@ -48,7 +48,7 @@ export const defaultIntegrationSettings: IntegrationSetting[] = [
       text: "[CRITICAL] Всплеск HTTP 5xx в payment-svc",
       deepLink: "/dashboard"
     },
-    productionRequirements: ["Telegram bot Token", "chat id", "notification policy", "secrets management"]
+    productionRequirements: ["Telegram bot Token", "chat id", "notification policy", "secrets manager"]
   },
   {
     kind: "slack",
@@ -61,7 +61,7 @@ export const defaultIntegrationSettings: IntegrationSetting[] = [
       channel: "slack",
       blocks: ["название инцидента", "сводка ИИ", "рекомендуемые действия"]
     },
-    productionRequirements: ["Slack app", "Webhook URL", "workspace approval", "secrets management"]
+    productionRequirements: ["Slack app", "Webhook URL", "workspace approval", "secrets manager"]
   },
   {
     kind: "email",
@@ -75,7 +75,7 @@ export const defaultIntegrationSettings: IntegrationSetting[] = [
       subject: "Сводка инцидента",
       recipients: ["on-call@example.com"]
     },
-    productionRequirements: ["SMTP endpoint", "sender identity", "recipient groups", "secrets management"]
+    productionRequirements: ["SMTP endpoint", "sender identity", "recipient groups", "secrets manager"]
   },
   {
     kind: "llm",

@@ -39,7 +39,7 @@ export function SiteHeader() {
           <Link to="/login">Войти</Link>
         </Button>
         <Button asChild>
-          <Link to="/login">Начать работу</Link>
+          <Link to="/login">В кабинет</Link>
         </Button>
         <button
           className="site-header__menu"

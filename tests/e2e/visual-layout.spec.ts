@@ -35,7 +35,7 @@ async function assertLayout(page: Page) {
 
 test.describe("visual layout QA", () => {
   test.beforeAll(() => {
-    mkdirSync("test-results/visual-snapshots", { recursive: true });
+    mkdirSync("test-results/final-product-bugfix", { recursive: true });
   });
 
   for (const viewport of viewports) {
@@ -50,20 +50,20 @@ test.describe("visual layout QA", () => {
         await expect(page.locator("body")).toBeVisible();
         await assertLayout(page);
         await page.screenshot({
-          path: `test-results/visual-snapshots/${route === "/" ? "landing" : route.slice(1)}-${viewport.name}.png`,
+          path: `test-results/final-product-bugfix/${route === "/" ? "landing" : route.slice(1)}-${viewport.name}.png`,
           fullPage: true
         });
       }
 
       await login(page);
-      const appRoutes = ["/dashboard", "/incidents", `/incidents/${incidentId}`, "/integrations", "/app/docs", "/settings"];
+      const appRoutes = ["/dashboard", "/incidents", `/incidents/${incidentId}`, "/assistant", "/integrations", "/app/docs", "/settings", "/roadmap"];
       for (const route of appRoutes) {
         await page.goto(route);
         await installVisualGuards(page);
         await expect(page.locator(".workspace")).toBeVisible();
         await assertLayout(page);
         await page.screenshot({
-          path: `test-results/visual-snapshots/${route.replaceAll("/", "-").replace(/^-/, "")}-${viewport.name}.png`,
+          path: `test-results/final-product-bugfix/${route.replaceAll("/", "-").replace(/^-/, "")}-${viewport.name}.png`,
           fullPage: true
         });
       }

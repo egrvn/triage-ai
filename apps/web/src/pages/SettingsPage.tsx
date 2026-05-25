@@ -1,5 +1,6 @@
 import { CheckCircle2, Info, ShieldCheck, UserCircle } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import { Button } from "@/components/ui/button";
@@ -16,10 +17,11 @@ export function SettingsPage() {
   const [theme, setTheme] = useState("system");
   const [message, setMessage] = useState("");
 
-  useEffect(() => {
-    window.localStorage.setItem(ROLE_KEY, role);
+  const selectRole = (nextRole: "on-call" | "escalation") => {
+    setRole(nextRole);
+    window.localStorage.setItem(ROLE_KEY, nextRole);
     setMessage("Роль по умолчанию сохранена");
-  }, [role]);
+  };
 
   useEffect(() => {
     const readTheme = () => setTheme(window.localStorage.getItem("triage-ai-theme") ?? "system");
@@ -59,11 +61,27 @@ export function SettingsPage() {
           <div className="settings-card__icon">
             <ShieldCheck size={22} />
           </div>
-          <h2>Роль по умолчанию</h2>
+          <h2 id="default-role-title">Роль по умолчанию</h2>
           <p>Переключатель роли влияет на подсказки и рекомендуемые действия в панели управления.</p>
-          <div className="segmented-control">
-            <button type="button" className={role === "on-call" ? "active" : ""} onClick={() => setRole("on-call")}>Дежурный инженер</button>
-            <button type="button" className={role === "escalation" ? "active" : ""} onClick={() => setRole("escalation")}>Эскалация</button>
+          <div className="segmented-control role-segmented-control" role="radiogroup" aria-labelledby="default-role-title">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={role === "on-call"}
+              className={role === "on-call" ? "active" : ""}
+              onClick={() => selectRole("on-call")}
+            >
+              Дежурный инженер
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={role === "escalation"}
+              className={role === "escalation" ? "active" : ""}
+              onClick={() => selectRole("escalation")}
+            >
+              Эскалация
+            </button>
           </div>
         </article>
 
@@ -84,10 +102,10 @@ export function SettingsPage() {
             <Info size={22} />
           </div>
           <h2>Статус тестового режима</h2>
-          <p>Реальные adapters и secrets management отключены для безопасного воспроизводимого запуска.</p>
+          <p>Реальные адаптеры и secrets manager отключены для безопасного воспроизводимого запуска.</p>
           <ul className="settings-list">
             <li><CheckCircle2 size={15} />Синтетические сигналы Prometheus/ELK доступны</li>
-            <li><CheckCircle2 size={15} />ИИ-провайдер работает на правилах без внешних keys</li>
+            <li><CheckCircle2 size={15} />AI-провайдер работает на правилах без внешних API-ключей</li>
             <li><CheckCircle2 size={15} />Secrets в коде не хранятся</li>
           </ul>
           <Button
@@ -103,10 +121,12 @@ export function SettingsPage() {
         </article>
 
         <article className="ops-panel settings-card disabled-card">
-          <h2>Production auth</h2>
-          <p>RBAC, SSO и audit log требуют backend auth и инфраструктурного решения Cloud.ru.</p>
-          <Button type="button" disabled>
-            Недоступно в MVP
+          <h2>Production-аутентификация</h2>
+          <p>RBAC, SSO и audit log требуют backend auth и корпоративной инфраструктуры.</p>
+          <Button asChild variant="outline">
+            <Link to="/roadmap">
+            В roadmap
+            </Link>
           </Button>
         </article>
       </section>

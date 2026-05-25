@@ -19,3 +19,4 @@ playwright-report/
 *.db
 apps/api/prisma/dev.db*
 triage_ai_site_assets/
+triage_ai_logo_assets/

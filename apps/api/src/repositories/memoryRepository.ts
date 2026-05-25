@@ -2,8 +2,12 @@ import type {
   FeedbackRequest,
   FeedbackResponse,
   DemoResetResponse,
+  EscalationEvent,
+  EscalationResponse,
   IncidentAnalysis,
+  IncidentChatMessage,
   IncidentDetail,
+  IncidentEvent,
   IncidentListItem,
   IntegrationSetting,
   TestIntegrationResponse,
@@ -30,6 +34,13 @@ function toListItem(incident: IncidentDetail): IncidentListItem {
     status: incident.status,
     startedAt: incident.startedAt,
     detectedAt: incident.detectedAt,
+    acceptedAt: incident.acceptedAt,
+    escalatedAt: incident.escalatedAt,
+    closedAt: incident.closedAt,
+    owner: incident.owner,
+    escalationTarget: incident.escalationTarget,
+    escalationReason: incident.escalationReason,
+    handoffSummary: incident.handoffSummary,
     scenarioId: incident.scenarioId,
     summary: incident.analysis?.summary ?? incident.summary,
     hypothesis: incident.analysis?.hypothesis ?? incident.hypothesis,
@@ -40,6 +51,30 @@ function toListItem(incident: IncidentDetail): IncidentListItem {
 export class MemoryIncidentRepository implements IncidentRepository {
   private incidents = new Map<string, IncidentDetail>();
   private settings = new Map(defaultIntegrationSettings.map((setting) => [setting.kind, clone(setting)]));
+  private chatMessages = new Map<string, IncidentChatMessage[]>();
+  private escalationEvents = new Map<string, EscalationEvent[]>();
+  private incidentEvents = new Map<string, IncidentEvent[]>();
+  private incidentMeta = new Map<string, Partial<Pick<IncidentDetail, "acceptedAt" | "escalatedAt" | "closedAt" | "owner" | "escalationTarget" | "escalationReason" | "handoffSummary">>>();
+
+  private addEvent(incidentId: string, event: Omit<IncidentEvent, "id" | "at"> & { at?: string }): IncidentEvent {
+    const nextEvent: IncidentEvent = {
+      id: `evt-${nowId()}`,
+      at: event.at ?? new Date().toISOString(),
+      type: event.type,
+      actor: event.actor,
+      text: event.text
+    };
+    this.incidentEvents.set(incidentId, [...(this.incidentEvents.get(incidentId) ?? []), nextEvent]);
+    return clone(nextEvent);
+  }
+
+  private withRuntimeState(incident: IncidentDetail): IncidentDetail {
+    return {
+      ...incident,
+      ...(this.incidentMeta.get(incident.id) ?? {}),
+      events: this.incidentEvents.get(incident.id) ?? []
+    };
+  }
 
   async listScenarios(): Promise<ScenarioSummary[]> {
     return scenarioFixtures.map(({ alert: _alert, metrics: _metrics, logs: _logs, deploys: _deploys, ...summary }) => clone(summary));
@@ -58,17 +93,23 @@ export class MemoryIncidentRepository implements IncidentRepository {
       title: scenario.alert.title,
       serviceName: scenario.serviceName,
       severity: scenario.alert.severity,
-      status: "active",
+      status: "new",
       startedAt: scenario.alert.startedAt,
       detectedAt: scenario.alert.detectedAt,
       scenarioId: scenario.id,
       metrics: scenario.metrics.map((metric) => ({ ...metric, id: `${incidentId}-${metric.id}` })),
       logs: scenario.logs.map((log) => ({ ...log, id: `${incidentId}-${log.id}` })),
-      deploys: scenario.deploys.map((deploy) => ({ ...deploy, id: `${incidentId}-${deploy.id}` }))
+      deploys: scenario.deploys.map((deploy) => ({ ...deploy, id: `${incidentId}-${deploy.id}` })),
+      events: []
     };
 
     this.incidents.set(incidentId, incident);
-    return clone(incident);
+    this.addEvent(incidentId, {
+      type: "created",
+      actor: "Triage AI",
+      text: "Инцидент создан из демонстрационного сценария."
+    });
+    return clone(this.withRuntimeState(incident));
   }
 
   async ingestAlert(input: {
@@ -84,26 +125,32 @@ export class MemoryIncidentRepository implements IncidentRepository {
       title: input.title,
       serviceName: input.serviceName,
       severity: input.severity,
-      status: "active",
+      status: "new",
       startedAt: input.timestamp,
       detectedAt: input.timestamp,
       metrics: [],
       logs: [],
-      deploys: []
+      deploys: [],
+      events: []
     };
 
     this.incidents.set(incidentId, incident);
-    return clone(incident);
+    this.addEvent(incidentId, {
+      type: "created",
+      actor: "Triage AI",
+      text: "Инцидент создан из входящего alert."
+    });
+    return clone(this.withRuntimeState(incident));
   }
 
   async listIncidents(): Promise<IncidentListItem[]> {
     return [...this.incidents.values()]
       .toSorted((a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime())
-      .map(toListItem);
+      .map((incident) => toListItem(this.withRuntimeState(incident)));
   }
 
   async getIncident(id: string): Promise<IncidentDetail | null> {
-    return this.incidents.has(id) ? clone(this.incidents.get(id)!) : null;
+    return this.incidents.has(id) ? clone(this.withRuntimeState(this.incidents.get(id)!)) : null;
   }
 
   async saveAnalysis(incidentId: string, analysis: IncidentAnalysis): Promise<IncidentDetail> {
@@ -122,7 +169,7 @@ export class MemoryIncidentRepository implements IncidentRepository {
     };
 
     this.incidents.set(incidentId, nextIncident);
-    return clone(nextIncident);
+    return clone(this.withRuntimeState(nextIncident));
   }
 
   async updateIncidentStatus(incidentId: string, input: UpdateIncidentStatus): Promise<IncidentDetail> {
@@ -132,13 +179,40 @@ export class MemoryIncidentRepository implements IncidentRepository {
       throw new Error(`Incident ${incidentId} was not found`);
     }
 
+    const previousStatus = incident.status;
+    const now = new Date().toISOString();
+    const meta = this.incidentMeta.get(incidentId) ?? {};
+    const nextMeta = { ...meta };
+
+    if (input.status === "in_progress") {
+      nextMeta.acceptedAt = now;
+      nextMeta.owner = "Дежурный инженер";
+      this.addEvent(incidentId, {
+        type: previousStatus === "escalated" ? "returned_to_work" : "accepted",
+        actor: "Дежурный инженер",
+        text: previousStatus === "escalated"
+          ? "Инцидент возвращён в работу дежурному инженеру."
+          : "Инцидент принят в работу дежурным инженером."
+      });
+    }
+
+    if (input.status === "closed") {
+      nextMeta.closedAt = now;
+      this.addEvent(incidentId, {
+        type: "closed",
+        actor: "Дежурный инженер",
+        text: "Инцидент закрыт после проверки контекста."
+      });
+    }
+
     const nextIncident: IncidentDetail = {
       ...incident,
       status: input.status
     };
 
+    this.incidentMeta.set(incidentId, nextMeta);
     this.incidents.set(incidentId, nextIncident);
-    return clone(nextIncident);
+    return clone(this.withRuntimeState(nextIncident));
   }
 
   async saveFeedback(incidentId: string, _feedback: FeedbackRequest): Promise<FeedbackResponse> {
@@ -151,6 +225,96 @@ export class MemoryIncidentRepository implements IncidentRepository {
       incidentId,
       createdAt: new Date().toISOString()
     };
+  }
+
+  async listChatMessages(incidentId: string): Promise<IncidentChatMessage[]> {
+    if (!this.incidents.has(incidentId)) {
+      throw new Error(`Incident ${incidentId} was not found`);
+    }
+
+    return (this.chatMessages.get(incidentId) ?? []).map(clone);
+  }
+
+  async saveChatMessage(message: IncidentChatMessage): Promise<IncidentChatMessage> {
+    if (!this.incidents.has(message.incidentId)) {
+      throw new Error(`Incident ${message.incidentId} was not found`);
+    }
+
+    const messages = this.chatMessages.get(message.incidentId) ?? [];
+    messages.push(clone(message));
+    this.chatMessages.set(message.incidentId, messages);
+    return clone(message);
+  }
+
+  async listEscalations(incidentId: string): Promise<EscalationEvent[]> {
+    if (!this.incidents.has(incidentId)) {
+      throw new Error(`Incident ${incidentId} was not found`);
+    }
+
+    return (this.escalationEvents.get(incidentId) ?? []).map(clone);
+  }
+
+  async createEscalation(incidentId: string): Promise<EscalationResponse> {
+    const incident = this.incidents.get(incidentId);
+
+    if (!incident) {
+      throw new Error(`Incident ${incidentId} was not found`);
+    }
+
+    const evidenceRefs = (incident.analysis?.evidence ?? []).slice(0, 5).map((item) => item.id);
+    const now = new Date().toISOString();
+    const escalationReason = "Низкая уверенность гипотезы или требуется подтверждение другой команды.";
+    const escalationTarget = "Команда платформы / ответственная команда";
+    const handoffSummary = [
+      `Инцидент: ${incident.title}`,
+      `Сервис: ${incident.serviceName}`,
+      `Критичность: ${incident.severity}`,
+      `Confidence: ${incident.analysis?.confidence ?? incident.confidence ?? "не указана"}`,
+      `Гипотеза: ${incident.analysis?.hypothesis ?? incident.hypothesis ?? "Гипотеза не подтверждена"}`,
+      `Impact: ${incident.analysis?.summary ?? incident.summary ?? "Impact требует проверки"}`,
+      `Evidence: ${(incident.analysis?.evidence ?? []).map((item) => item.title).join("; ") || "Evidence недостаточно"}`
+    ].join("\n");
+    const escalation: EscalationEvent = {
+      id: `esc-${nowId()}`,
+      incidentId,
+      createdAt: now,
+      createdBy: "demo@triage.ai",
+      status: "sent",
+      targetRole: "escalation",
+      summary: handoffSummary,
+      reason: escalationReason,
+      evidenceRefs
+    };
+    const nextIncident: IncidentDetail = { ...incident, status: "escalated" };
+    const events = this.escalationEvents.get(incidentId) ?? [];
+
+    this.incidentMeta.set(incidentId, {
+      ...(this.incidentMeta.get(incidentId) ?? {}),
+      escalatedAt: now,
+      escalationTarget,
+      escalationReason,
+      handoffSummary
+    });
+    this.addEvent(incidentId, {
+      type: "escalated",
+      actor: "Дежурный инженер",
+      text: "Инцидент передан на эскалацию с handoff summary, timeline и evidence."
+    });
+    this.incidents.set(incidentId, nextIncident);
+    this.escalationEvents.set(incidentId, [...events, escalation]);
+    return { incident: clone(this.withRuntimeState(nextIncident)), escalation: clone(escalation) };
+  }
+
+  async recordHandoffCopied(incidentId: string): Promise<IncidentEvent> {
+    if (!this.incidents.has(incidentId)) {
+      throw new Error(`Incident ${incidentId} was not found`);
+    }
+
+    return this.addEvent(incidentId, {
+      type: "handoff_copied",
+      actor: "Дежурный инженер",
+      text: "Handoff summary скопирован для передачи команде."
+    });
   }
 
   async listIntegrations(): Promise<IntegrationSetting[]> {
@@ -202,6 +366,10 @@ export class MemoryIncidentRepository implements IncidentRepository {
   async resetDemo(): Promise<DemoResetResponse> {
     const incidentsCleared = this.incidents.size;
     this.incidents.clear();
+    this.chatMessages.clear();
+    this.escalationEvents.clear();
+    this.incidentEvents.clear();
+    this.incidentMeta.clear();
     this.settings = new Map(defaultIntegrationSettings.map((setting) => [setting.kind, clone(setting)]));
 
     return {

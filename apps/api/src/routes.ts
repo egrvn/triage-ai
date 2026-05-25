@@ -2,15 +2,17 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   AlertIngestSchema,
   FeedbackRequestSchema,
+  IncidentChatRequestSchema,
   IntegrationKindSchema,
   UpdateIncidentStatusSchema,
   UpdateIntegrationSettingSchema
 } from "@triage-ai/shared";
-import { ZodError, type ZodSchema } from "zod";
+import { z, ZodError } from "zod";
 import { analyzeIncident } from "./services/analyzer.js";
+import { answerIncidentQuestion, createUserChatMessage } from "./services/copilot.js";
 import type { IncidentRepository } from "./repositories/types.js";
 
-function parse<T>(schema: ZodSchema<T>, value: unknown): T {
+function parse<TSchema extends z.ZodTypeAny>(schema: TSchema, value: unknown): z.infer<TSchema> {
   return schema.parse(value);
 }
 
@@ -100,6 +102,64 @@ export async function registerRoutes(app: FastifyInstance, repository: IncidentR
       }
 
       const message = error instanceof Error ? error.message : "feedback_failed";
+      return reply.status(message.includes("not found") ? 404 : 500).send({ error: message });
+    }
+  });
+
+  app.get<{ Params: { id: string } }>("/api/incidents/:id/chat", async (request, reply) => {
+    try {
+      return await repository.listChatMessages(request.params.id);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "chat_history_failed";
+      return reply.status(message.includes("not found") ? 404 : 500).send({ error: message });
+    }
+  });
+
+  app.post<{ Params: { id: string } }>("/api/incidents/:id/chat", async (request, reply) => {
+    try {
+      const input = parse(IncidentChatRequestSchema, request.body);
+      const incident = await repository.getIncident(request.params.id);
+
+      if (!incident) {
+        return reply.status(404).send({ error: "incident_not_found" });
+      }
+
+      await repository.saveChatMessage(createUserChatMessage(incident.id, input.message));
+      const message = await repository.saveChatMessage(answerIncidentQuestion(incident, input));
+      return { message };
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return sendZodError(reply, error);
+      }
+
+      const message = error instanceof Error ? error.message : "chat_failed";
+      return reply.status(message.includes("not found") ? 404 : 500).send({ error: message });
+    }
+  });
+
+  app.get<{ Params: { id: string } }>("/api/incidents/:id/escalations", async (request, reply) => {
+    try {
+      return await repository.listEscalations(request.params.id);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "escalation_history_failed";
+      return reply.status(message.includes("not found") ? 404 : 500).send({ error: message });
+    }
+  });
+
+  app.post<{ Params: { id: string } }>("/api/incidents/:id/escalations", async (request, reply) => {
+    try {
+      return await repository.createEscalation(request.params.id);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "escalation_failed";
+      return reply.status(message.includes("not found") ? 404 : 500).send({ error: message });
+    }
+  });
+
+  app.post<{ Params: { id: string } }>("/api/incidents/:id/escalations/handoff-copied", async (request, reply) => {
+    try {
+      return await repository.recordHandoffCopied(request.params.id);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "handoff_copy_event_failed";
       return reply.status(message.includes("not found") ? 404 : 500).send({ error: message });
     }
   });

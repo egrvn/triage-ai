@@ -1,26 +1,47 @@
 import {
   Activity,
   BookOpenText,
-  Boxes,
-  Gauge,
+  Bot,
+  FlaskConical,
+  LayoutDashboard,
   LogOut,
+  Map,
+  Plug,
   Settings,
-  Shield,
   UserCircle
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import { IncidentWorkspaceProvider } from "@/features/incidents/incident-workspace";
+import { api } from "@/lib/api";
 
-const navItems = [
-  { to: "/dashboard", label: "Панель управления", icon: Gauge },
-  { to: "/incidents", label: "Инциденты", icon: Activity },
-  { to: "/integrations", label: "Интеграции", icon: Boxes },
-  { to: "/app/docs", label: "Документация", icon: BookOpenText },
-  { to: "/settings", label: "Настройки", icon: Settings }
+const navGroups = [
+  {
+    label: "Работа",
+    items: [
+      { to: "/dashboard", label: "Панель управления", icon: LayoutDashboard },
+      { to: "/incidents", label: "Инциденты", icon: Activity },
+      { to: "/assistant", label: "AI-ассистент", icon: Bot },
+      { to: "/integrations", label: "Интеграции", icon: Plug }
+    ]
+  },
+  {
+    label: "Справка",
+    items: [
+      { to: "/app/docs", label: "Документация", icon: BookOpenText },
+      { to: "/roadmap", label: "Roadmap", icon: Map }
+    ]
+  },
+  {
+    label: "Параметры",
+    items: [
+      { to: "/settings", label: "Настройки", icon: Settings }
+    ]
+  }
 ];
 
 function pageMeta(pathname: string) {
@@ -38,11 +59,25 @@ function pageMeta(pathname: string) {
       breadcrumb: "Интеграции"
     };
   }
+  if (pathname.startsWith("/assistant")) {
+    return {
+      title: "AI-ассистент",
+      description: "Рабочее окно для вопросов по выбранному инциденту, citations и handoff-сводкам.",
+      breadcrumb: "AI-ассистент"
+    };
+  }
   if (pathname.startsWith("/settings")) {
     return {
       title: "Настройки",
       description: "Профиль тестового пользователя, роль по умолчанию, тема и статус тестового режима.",
       breadcrumb: "Настройки"
+    };
+  }
+  if (pathname.startsWith("/roadmap")) {
+    return {
+      title: "Roadmap продукта",
+      description: "Что нужно сделать дальше, чтобы Triage AI был готов к production-использованию.",
+      breadcrumb: "Roadmap"
     };
   }
   if (pathname.startsWith("/app/docs")) {
@@ -61,7 +96,7 @@ function pageMeta(pathname: string) {
   }
   return {
     title: "Панель разбора инцидентов",
-    description: "MVP для incident response: автоматическая сводка, гипотеза причины, связь с развертыванием и объяснение выводов.",
+    description: "Консоль incident response: сводка, гипотеза причины, связь с развертыванием и объяснение выводов.",
     breadcrumb: "Панель управления"
   };
 }
@@ -71,43 +106,63 @@ export function AppShell() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const meta = pageMeta(pathname);
+  const incidentsQuery = useQuery({ queryKey: ["incidents"], queryFn: api.incidents });
+  const incidents = incidentsQuery.data ?? [];
+  const incidentCounts = {
+    inProgress: incidents.filter((incident) => incident.status === "in_progress").length,
+    escalated: incidents.filter((incident) => incident.status === "escalated").length,
+    closed: incidents.filter((incident) => incident.status === "closed").length
+  };
 
   return (
     <div className="app-shell">
       <aside className="side-nav">
         <BrandLogo to="/dashboard" variant="markWithText" className="side-nav__brand" label="Открыть панель управления" />
 
-        <nav className="nav-list" aria-label="Основная навигация">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <NavLink key={item.to} to={item.to} className={({ isActive }) => (isActive ? "active" : "")}>
-                <Icon size={18} />
-                {item.label}
-              </NavLink>
-            );
-          })}
-        </nav>
+        <div className="sidebar-scroll-area">
+          <nav className="nav-list" aria-label="Основная навигация">
+            {navGroups.map((group) => (
+              <div key={group.label} className="nav-group">
+                <span>{group.label}</span>
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <NavLink key={item.to} to={item.to} className={({ isActive }) => (isActive ? "active" : "")}>
+                      <Icon size={18} aria-hidden="true" />
+                      {item.label}
+                    </NavLink>
+                  );
+                })}
+              </div>
+            ))}
+          </nav>
 
-        <div className="sidebar-user">
-          <div className="sidebar-user__avatar">
-            <UserCircle size={18} />
-          </div>
-          <div>
-            <strong>{session?.name ?? "Тестовый пользователь"}</strong>
-            <span>{session?.email}</span>
+          <div className="sidebar-status-counters" aria-label="Очереди инцидентов">
+            <NavLink to="/incidents?mode=on-call" className="sidebar-status-counter">
+              <span>В работе</span>
+              <strong className="sidebar-counter-badge sidebar-counter-badge--warning">{incidentCounts.inProgress}</strong>
+            </NavLink>
+            <NavLink to="/incidents?mode=escalation" className="sidebar-status-counter">
+              <span>Эскалация</span>
+              <strong className="sidebar-counter-badge sidebar-counter-badge--danger">{incidentCounts.escalated}</strong>
+            </NavLink>
+            <NavLink to="/incidents" className="sidebar-status-counter muted">
+              <span>Закрытые</span>
+              <strong className="sidebar-counter-badge sidebar-counter-badge--muted">{incidentCounts.closed}</strong>
+            </NavLink>
           </div>
         </div>
 
         <div className="sidebar-footer">
-          <div className="mock-callout compact">
-            <Shield size={16} />
-            <span>Тестовый режим: синтетические данные, без production secrets</span>
+          <div className="sidebar-user">
+            <div className="sidebar-user__avatar">
+              <UserCircle size={18} />
+            </div>
+            <div>
+              <strong>{session?.name ?? "Тестовый пользователь"}</strong>
+              <span>{session?.email}</span>
+            </div>
           </div>
-          <button className="sidebar-action" type="button" onClick={() => navigate("/settings")}>
-            <Settings size={16} />
-            Настройки
-          </button>
           <button
             className="sidebar-action danger"
             type="button"
@@ -131,7 +186,7 @@ export function AppShell() {
           </div>
           <div className="top-bar__actions">
             <span className="top-bar__mode">
-              <Shield size={14} aria-hidden="true" />
+              <FlaskConical size={14} aria-hidden="true" />
               Тестовый режим
             </span>
             <AnimatedThemeToggler />

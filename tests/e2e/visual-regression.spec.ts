@@ -5,7 +5,9 @@ import { createIncident, expectNoHorizontalScroll, login } from "./helpers";
 const screenshotRoutes = [
   { name: "dashboard", route: "/dashboard", protected: true },
   { name: "incidents", route: "/incidents", protected: true },
+  { name: "assistant", route: "/assistant", protected: true },
   { name: "integrations", route: "/integrations", protected: true },
+  { name: "roadmap", route: "/roadmap", protected: true },
   { name: "docs", route: "/docs", protected: false }
 ];
 
@@ -16,7 +18,7 @@ const viewports = [
 
 test.describe("visual screenshot smoke", () => {
   test.beforeAll(() => {
-    mkdirSync("test-results/visual-snapshots", { recursive: true });
+    mkdirSync("test-results/final-product-bugfix", { recursive: true });
   });
 
   for (const viewport of viewports) {
@@ -35,7 +37,7 @@ test.describe("visual screenshot smoke", () => {
         await expect(page.locator("body")).toBeVisible();
         await expectNoHorizontalScroll(page);
         await page.screenshot({
-          path: `test-results/visual-snapshots/${item.name}-${viewport.name}.png`,
+          path: `test-results/final-product-bugfix/${item.name}-${viewport.name}.png`,
           fullPage: true
         });
       }

@@ -17,22 +17,22 @@ export type IncidentTrendPoint = {
 export const roleCopy: Record<RoleMode, { title: string; hint: string; actions: string[] }> = {
   "on-call": {
     title: "Режим дежурного инженера",
-    hint: "Сфокусируйтесь на impact, affected service и ближайшем безопасном действии.",
-    actions: ["Проверить health сервиса", "Сравнить error rate до и после развертывания", "Подготовить rollback plan", "Создать эскалацию при росте impact"]
+    hint: "Дежурный инженер — первичный разбор, принятие в работу и решение по mitigation.",
+    actions: ["Проверить diff развертывания", "Сравнить error-rate до и после deploy", "Открыть ключевые логи", "Подготовить rollback plan"]
   },
   escalation: {
     title: "Режим эскалации",
-    hint: "Проверьте timeline, подтверждающие данные и уверенность перед передачей контекста команде.",
-    actions: ["Проверить полноту подтверждающих данных", "Сверить timeline и связь с развертыванием", "Оценить уверенность", "Передать контекст владельцу сервиса"]
+    hint: "Эскалация — очередь инцидентов, переданных другой команде с полным контекстом, timeline и evidence.",
+    actions: ["Скопировать summary", "Показать timeline", "Показать evidence", "Указать, что уже проверено"]
   }
 };
 
 export const guideSteps = [
   ["Выберите демонстрационный сценарий", "Сценарий имитирует поток сигналов из Prometheus/ELK и создаёт инцидент для анализа."],
-  ["Запустите разбор", "Нажмите кнопку запуска, чтобы система собрала контекст, сформировала сводку и гипотезу причины."],
-  ["Проверьте подтверждающие данные", "Откройте детали инцидента и проверьте логи, метрики, timeline и связь с развертыванием."],
-  ["Выберите действие", "Дежурный инженер может принять инцидент в работу, закрыть его или отправить на эскалацию."],
-  ["Проверьте интеграции", "В разделе Интеграции показано, какие источники работают в тестовом режиме, а какие требуют production-настройки."]
+  ["Запустите разбор", "Система соберёт контекст, сформирует summary, гипотезу причины, confidence и список evidence."],
+  ["Проверьте подтверждающие данные", "Откройте детали инцидента: логи, метрики, timeline, impact и связь с развертыванием."],
+  ["Примите решение как дежурный инженер", "Возьмите инцидент в работу, закройте его, если причина понятна, или передайте на эскалацию, если нужна другая команда или confidence низкая."],
+  ["Отследите очередь эскалации", "Инциденты, переданные на эскалацию, попадают в отдельный список. В нём доступен handoff summary, evidence и события передачи контекста."]
 ];
 
 type IncidentWorkspaceValue = {
@@ -52,8 +52,8 @@ const IncidentWorkspaceContext = createContext<IncidentWorkspaceValue | null>(nu
 export function buildTrendPoint(incidents: IncidentListItem[], label?: string): IncidentTrendPoint {
   return {
     time: label ?? new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" }).format(new Date()),
-    critical: incidents.filter((incident) => incident.severity === "critical" && incident.status !== "resolved").length,
-    warning: incidents.filter((incident) => incident.severity === "warning" && incident.status !== "resolved").length,
+    critical: incidents.filter((incident) => incident.severity === "critical" && incident.status !== "closed").length,
+    warning: incidents.filter((incident) => incident.severity === "warning" && incident.status !== "closed").length,
     analyzed: incidents.filter((incident) => Boolean(incident.confidence)).length,
     lowConfidence: incidents.filter((incident) => incident.confidence === "low").length
   };

@@ -1,8 +1,8 @@
-import type { IncidentStatus } from "@triage-ai/shared";
+import type { IncidentListItem, IncidentStatus } from "@triage-ai/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Info, ShieldAlert, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,11 +20,13 @@ import {
 } from "@/features/incidents/incident-filters";
 import { buildTrendPoint, useIncidentWorkspace } from "@/features/incidents/incident-workspace";
 import { api } from "@/lib/api";
+import { formatClock } from "@/lib/labels";
 
 export function IncidentsPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { id: routeIncidentId } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const workspace = useIncidentWorkspace();
   const [filters, setFilters] = useState(() => createDefaultIncidentFilters());
   const [statusMessage, setStatusMessage] = useState("");
@@ -32,25 +34,49 @@ export function IncidentsPage() {
   const incidentsQuery = useQuery({ queryKey: ["incidents"], queryFn: api.incidents });
   const incidents = incidentsQuery.data ?? [];
 
+  useEffect(() => {
+    const mode = searchParams.get("mode");
+    if (mode === "escalation" && workspace.role !== "escalation") {
+      setFilters(createDefaultIncidentFilters());
+      workspace.setRole("escalation");
+    }
+    if (mode === "on-call" && workspace.role !== "on-call") {
+      setFilters(createDefaultIncidentFilters());
+      workspace.setRole("on-call");
+    }
+  }, [searchParams, workspace]);
+
+  const modeIncidents = useMemo(() => {
+    return incidents.filter((incident) => {
+      if (workspace.role === "on-call") {
+        return incident.status === "new" || incident.status === "in_progress";
+      }
+      return incident.status === "escalated";
+    });
+  }, [incidents, workspace.role]);
+
   const filteredIncidents = useMemo(() => {
-    return incidents.filter((incident) => matchesIncidentFilters(incident, filters));
-  }, [filters, incidents]);
+    return modeIncidents.filter((incident) => matchesIncidentFilters(incident, filters));
+  }, [filters, modeIncidents]);
 
   useEffect(() => {
     if (routeIncidentId) {
       workspace.setSelectedIncidentId(routeIncidentId);
       return;
     }
-    const firstIncident = filteredIncidents[0] ?? incidents[0];
-    if (!workspace.selectedIncidentId && firstIncident) {
+    const firstIncident = filteredIncidents[0] ?? null;
+    if (firstIncident && !filteredIncidents.some((incident) => incident.id === workspace.selectedIncidentId)) {
       workspace.setSelectedIncidentId(firstIncident.id);
+      return;
     }
-  }, [filteredIncidents, incidents, routeIncidentId, workspace]);
+    if (!firstIncident && workspace.selectedIncidentId) {
+      workspace.setSelectedIncidentId(null);
+    }
+  }, [filteredIncidents, routeIncidentId, workspace]);
 
   const selectedIncidentId = routeIncidentId
     ?? (filteredIncidents.some((incident) => incident.id === workspace.selectedIncidentId) ? workspace.selectedIncidentId : null)
     ?? filteredIncidents[0]?.id
-    ?? incidents[0]?.id
     ?? null;
   const selectedIncidentQuery = useQuery({
     queryKey: ["incident", selectedIncidentId],
@@ -59,12 +85,64 @@ export function IncidentsPage() {
   });
 
   const statusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: IncidentStatus }) => api.updateIncidentStatus(id, status),
+    mutationFn: async ({ id, status }: { id: string; status: IncidentStatus }) => {
+      if (status === "escalated") {
+        const response = await api.createEscalation(id);
+        return response.incident;
+      }
+      return api.updateIncidentStatus(id, status);
+    },
     onSuccess: (incident) => {
       queryClient.setQueryData(["incident", incident.id], incident);
+      queryClient.setQueryData<IncidentListItem[]>(["incidents"], (current) => {
+        const source = current?.length ? current : incidents;
+        const nextItem: IncidentListItem = { ...incident };
+        return source.some((item) => item.id === incident.id)
+          ? source.map((item) => item.id === incident.id ? { ...item, ...nextItem } : item)
+          : [nextItem, ...source];
+      });
       void queryClient.invalidateQueries({ queryKey: ["incidents"] });
+      void queryClient.invalidateQueries({ queryKey: ["incident-escalations", incident.id] });
       workspace.appendTrend(incidents.map((item) => item.id === incident.id ? incident : item));
+      if (incident.status === "escalated") {
+        setFilters(createDefaultIncidentFilters());
+        workspace.setRole("escalation");
+        workspace.setSelectedIncidentId(incident.id);
+        setStatusMessage("Инцидент отправлен на эскалацию");
+        return;
+      }
+      if (incident.status === "in_progress") {
+        setFilters(createDefaultIncidentFilters());
+        workspace.setRole("on-call");
+        workspace.setSelectedIncidentId(incident.id);
+        setStatusMessage("Инцидент принят в работу");
+        return;
+      }
       setStatusMessage(`Инцидент: ${actionLabel(incident.status)}`);
+    },
+    onError: () => {
+      setStatusMessage("Не удалось изменить статус инцидента. Проверьте API и перезапустите dev-server.");
+    }
+  });
+
+  const runScenarioMutation = useMutation({
+    mutationFn: () => api.runScenario("release-regression-5xx"),
+    onSuccess: (response) => {
+      queryClient.setQueryData(["incident", response.incident.id], response.incident);
+      queryClient.setQueryData<IncidentListItem[]>(["incidents"], (current = []) => [
+        { ...response.incident },
+        ...current.filter((incident) => incident.id !== response.incident.id)
+      ]);
+      setFilters(createDefaultIncidentFilters());
+      workspace.setRole("on-call");
+      workspace.setSelectedIncidentId(response.incident.id);
+      workspace.appendTrend([response.incident, ...incidents.filter((incident) => incident.id !== response.incident.id)]);
+      setStatusMessage("Демонстрационный сценарий выполнен: инцидент создан и добавлен в очередь");
+      navigate(`/incidents/${response.incident.id}`);
+      void queryClient.invalidateQueries({ queryKey: ["incidents"] });
+    },
+    onError: () => {
+      setStatusMessage("Не удалось запустить сценарий. Проверьте API.");
     }
   });
 
@@ -78,10 +156,10 @@ export function IncidentsPage() {
   });
 
   const metrics = useMemo(() => ({
-    active: incidents.filter((incident) => incident.status !== "resolved").length,
-    critical: incidents.filter((incident) => incident.severity === "critical" && incident.status !== "resolved").length,
-    analyzed: incidents.filter((incident) => Boolean(incident.confidence)).length,
-    lowConfidence: incidents.filter((incident) => incident.confidence === "low").length
+    new: incidents.filter((incident) => incident.status === "new").length,
+    inProgress: incidents.filter((incident) => incident.status === "in_progress").length,
+    escalated: incidents.filter((incident) => incident.status === "escalated").length,
+    closed: incidents.filter((incident) => incident.status === "closed").length
   }), [incidents]);
 
   const trendData = workspace.trend.length ? workspace.trend : incidents.length ? [buildTrendPoint(incidents, "сейчас")] : [];
@@ -99,6 +177,10 @@ export function IncidentsPage() {
 
   const onStatus = (id: string, status: IncidentStatus) => {
     statusMutation.mutate({ id, status });
+  };
+  const switchRole = (role: typeof workspace.role) => {
+    setFilters(createDefaultIncidentFilters());
+    workspace.setRole(role);
   };
 
   if (routeIncidentId) {
@@ -127,9 +209,14 @@ export function IncidentsPage() {
   return (
     <div className="incidents-page">
       <section className="dashboard-toolbar">
-        <div className="role-switch-inline" aria-label="Переключить роль">
-          <button type="button" className={workspace.role === "on-call" ? "active" : ""} onClick={() => workspace.setRole("on-call")}>Дежурный инженер</button>
-          <button type="button" className={workspace.role === "escalation" ? "active" : ""} onClick={() => workspace.setRole("escalation")}>Эскалация</button>
+        <div className="role-mode-control" aria-label="Режим работы">
+          <div className="role-switch-inline">
+            <button type="button" className={workspace.role === "on-call" ? "active" : ""} onClick={() => switchRole("on-call")}>Дежурный инженер</button>
+            <button type="button" className={workspace.role === "escalation" ? "active" : ""} onClick={() => switchRole("escalation")}>Эскалация</button>
+          </div>
+          <p>{workspace.role === "on-call"
+            ? "Дежурный инженер — первичный разбор, принятие в работу и решение по mitigation."
+            : "Эскалация — очередь инцидентов, переданных другой команде с полным контекстом, timeline и evidence."}</p>
         </div>
       </section>
 
@@ -141,27 +228,20 @@ export function IncidentsPage() {
       ) : null}
 
       <section className="metrics-strip incidents-metrics">
-        <MetricCard label="Активные" value={metrics.active} caption="ожидают действия" icon={<Info size={18} />} />
-        <MetricCard label="Критичные" value={metrics.critical} caption="не закрыты" icon={<AlertTriangle size={18} />} />
-        <MetricCard label="Проанализировано ИИ" value={metrics.analyzed} caption="есть сводка" icon={<Sparkles size={18} />} />
-        <MetricCard label="Низкая уверенность" value={metrics.lowConfidence} caption="нужна проверка" icon={<ShieldAlert size={18} />} />
+        <MetricCard label="Новые" value={metrics.new} caption="ожидают triage" icon={<Info size={18} />} />
+        <MetricCard label="В работе" value={metrics.inProgress} caption="приняты инженером" icon={<Sparkles size={18} />} />
+        <MetricCard label="Эскалация" value={metrics.escalated} caption="handoff команде" icon={<AlertTriangle size={18} />} />
+        <MetricCard label="Закрытые" value={metrics.closed} caption="есть история" icon={<ShieldAlert size={18} />} />
       </section>
 
-      <IncidentFilters
-        filters={filters}
-        services={services}
-        resultCount={filteredIncidents.length}
-        onChange={setFilters}
-      />
-
       <div className="incidents-layout">
-        <IncidentTrendChart data={trendData} />
-
         <section className="ops-panel incident-queue incidents-list-panel">
           <div className="panel-heading">
             <div>
-              <h2>Инциденты</h2>
-              <p>Выберите инцидент, чтобы увидеть детали, timeline, логи и метрики.</p>
+              <h2>{workspace.role === "on-call" ? "Очередь дежурного инженера" : "Очередь эскалации"}</h2>
+              <p>{workspace.role === "on-call"
+                ? "Новые инциденты и инциденты в работе. Возьмите сигнал в работу, закройте или передайте на эскалацию."
+                : "Только инциденты, переданные другой команде с handoff summary, timeline и evidence."}</p>
             </div>
           </div>
           <div className="incident-list">
@@ -180,26 +260,50 @@ export function IncidentsPage() {
             ))}
             {!filteredIncidents.length ? (
               <EmptyState
-                title={incidents.length ? "Ничего не найдено" : "Инцидентов пока нет"}
-                description={incidents.length ? "Измените запрос или фильтры и попробуйте снова." : "Запустите демонстрационный сценарий на панели управления, чтобы увидеть динамику, график и детали разбора."}
+                title={workspace.role === "on-call" ? "Активных инцидентов нет" : "Инцидентов на эскалации пока нет"}
+                description={workspace.role === "on-call"
+                  ? "Активных инцидентов для дежурного инженера нет. Запустите демонстрационный сценарий или проверьте очередь эскалации."
+                  : "Нажмите «Эскалировать» в карточке инцидента, чтобы зафиксировать handoff-событие."}
               >
-                <Button asChild>
-                  <Link to="/dashboard">Перейти на панель управления</Link>
-                </Button>
+                {workspace.role === "on-call" ? (
+                  <Button type="button" disabled={runScenarioMutation.isPending} onClick={() => runScenarioMutation.mutate()}>
+                    {runScenarioMutation.isPending ? "Запускаем..." : "Запустить сценарий"}
+                  </Button>
+                ) : null}
               </EmptyState>
             ) : null}
           </div>
         </section>
 
-        <IncidentDetailSections
-          incident={selectedIncidentQuery.data}
-          role={workspace.role}
-          logs={filteredLogs}
-          onStatus={onStatus}
-          onFeedbackWrong={(id) => feedbackMutation.mutate(id)}
-          statusBusy={statusMutation.isPending || selectedIncidentQuery.isFetching}
-        />
+        <section className="ops-panel incident-log-overview">
+          <div className="panel-heading">
+            <div>
+              <h2>Логи выбранного инцидента</h2>
+              <p>Короткий срез по фильтрам. Полный разбор находится в рабочей области.</p>
+            </div>
+            {selectedIncidentId ? (
+              <Button asChild variant="outline" size="sm">
+                <Link to={`/incidents/${selectedIncidentId}`}>Открыть</Link>
+              </Button>
+            ) : null}
+          </div>
+          <div className="log-list overview">
+            {filteredLogs.slice(0, 6).map((log) => (
+              <pre key={log.id} id={`log-${log.id}`}><code>[{formatClock(log.timestamp)}] {log.level.toUpperCase()} {log.serviceName}: {log.message}</code></pre>
+            ))}
+            {!filteredLogs.length ? <p className="muted-copy">По выбранным фильтрам логи не найдены.</p> : null}
+          </div>
+        </section>
       </div>
+
+      <IncidentFilters
+        filters={filters}
+        services={services}
+        resultCount={filteredIncidents.length}
+        onChange={setFilters}
+      />
+
+      <IncidentTrendChart data={trendData} />
     </div>
   );
 }

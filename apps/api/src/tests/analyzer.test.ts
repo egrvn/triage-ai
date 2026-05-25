@@ -14,13 +14,14 @@ function incidentFromScenario(id: string): IncidentDetail {
     title: scenario.alert.title,
     serviceName: scenario.serviceName,
     severity: scenario.alert.severity,
-    status: "active",
+    status: "new",
     startedAt: scenario.alert.startedAt,
     detectedAt: scenario.alert.detectedAt,
     scenarioId: scenario.id,
     metrics: scenario.metrics,
     logs: scenario.logs,
-    deploys: scenario.deploys
+    deploys: scenario.deploys,
+    events: []
   };
 }
 

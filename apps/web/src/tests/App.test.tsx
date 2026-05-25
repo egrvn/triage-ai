@@ -29,7 +29,7 @@ const integration = {
   productionRequirements: ["Prometheus endpoint", "read-only API Token"]
 };
 
-function incident(status = "active") {
+function incident(status = "new") {
   return {
     id: "inc-1",
     title: "Всплеск HTTP 5xx в payment-svc",
@@ -65,7 +65,7 @@ function incident(status = "active") {
   };
 }
 
-function incidentList(status = "active") {
+function incidentList(status = "new") {
   const detail = incident(status);
   return [{
     id: detail.id,
@@ -106,7 +106,7 @@ function renderApp(route = "/") {
   );
 }
 
-describe("Triage AI MVP", () => {
+describe("Triage AI product console", () => {
   afterEach(() => {
     cleanup();
   });
@@ -114,7 +114,7 @@ describe("Triage AI MVP", () => {
   beforeEach(() => {
     window.localStorage.clear();
     let created = false;
-    let status = "active";
+    let status = "new";
     vi.restoreAllMocks();
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -134,7 +134,7 @@ describe("Triage AI MVP", () => {
 
       if (url.endsWith("/api/scenarios/release-regression-5xx/run") && method === "POST") {
         created = true;
-        status = "active";
+        status = "new";
         return Response.json({
           incident: incident(status),
           notification: {
@@ -148,6 +148,26 @@ describe("Triage AI MVP", () => {
       if (url.endsWith("/api/incidents/inc-1/status") && method === "PATCH") {
         status = JSON.parse(String(init?.body)).status;
         return Response.json(incident(status));
+      }
+
+      if (url.endsWith("/api/incidents/inc-1/chat") && method === "GET") {
+        return Response.json([]);
+      }
+
+      if (url.endsWith("/api/incidents/inc-1/chat") && method === "POST") {
+        return Response.json({
+          message: {
+            id: "chat-1",
+            incidentId: "inc-1",
+            role: "assistant",
+            content: "Сначала проверьте связь с развертыванием и ключевой лог.",
+            createdAt: "2026-05-23T10:00:00.000Z",
+            citations: [{ id: "ev1", label: "Связь с недавним развертыванием", targetId: "deploy-d1", source: "evidence" }],
+            confidence: "high",
+            suggestedActions: ["Проверить diff"],
+            auditId: "audit-1"
+          }
+        });
       }
 
       if (url.endsWith("/api/incidents/inc-1") && method === "GET") {
@@ -199,13 +219,13 @@ describe("Triage AI MVP", () => {
 
     expect(await screen.findByText(/payment-svc показывает резкий рост HTTP 5xx/i)).toBeInTheDocument();
     expect((await screen.findAllByText("Связь с недавним развертыванием")).length).toBeGreaterThan(0);
-    expect(screen.getByText("AI-ассистент")).toBeInTheDocument();
+    expect(screen.getAllByText("AI-ассистент").length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: /Объяснить гипотезу/i }).length).toBeGreaterThan(0);
 
     await user.click(screen.getAllByRole("button", { name: /Принять в работу/i })[0]!);
 
     await waitFor(() => {
-      expect(screen.getByText("Инцидент: Принят в работу")).toBeInTheDocument();
+      expect(screen.getByText("Инцидент принят в работу")).toBeInTheDocument();
     });
   });
 
@@ -225,7 +245,7 @@ describe("Triage AI MVP", () => {
     const user = userEvent.setup();
 
     expect((await screen.findAllByText("Документация")).length).toBeGreaterThan(0);
-    expect(screen.getByRole("img", { name: "Triage AI" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Triage AI" })).toBeInTheDocument();
     await user.type(screen.getByLabelText("Поиск"), "низкая");
 
     expect(screen.getAllByText("Демонстрационные сценарии").length).toBeGreaterThan(0);

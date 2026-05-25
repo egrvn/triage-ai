@@ -1,14 +1,14 @@
 import { ArrowUp } from "lucide-react";
 import { Link } from "react-router-dom";
 import { BrandLogo } from "@/components/BrandLogo";
-import { BGPattern } from "@/components/ui/bg-pattern";
 import { Button } from "@/components/ui/button";
+import { FallingPatternBackground } from "@/components/ui/falling-pattern-background";
 
 const marketingLinks = [
   { label: "Возможности", href: "/#features" },
   { label: "Как работает", href: "/#how-it-works" },
   { label: "Сценарии", href: "/#scenarios" },
-  { label: "Документация", href: "/docs" }
+  { label: "Incident Workspace", href: "/#workspace" }
 ];
 
 const productLinks = [
@@ -18,28 +18,39 @@ const productLinks = [
   { label: "Настройки", href: "/settings" }
 ];
 
+const docsLinks = [
+  { label: "Документация", href: "/docs" },
+  { label: "Сценарий продукта", href: "/docs#demo-script" },
+  { label: "Метрики пилота", href: "/docs#pilot-metrics" }
+];
+
 export function SiteFooter() {
   return (
     <footer className="site-footer">
-      <BGPattern className="site-footer__pattern" variant="dots" mask="fade-y" size={20} />
+      <FallingPatternBackground className="site-footer__pattern" intensity="subtle" density={12} duration={30} />
       <div className="site-footer__inner">
         <div className="site-footer__brand">
           <BrandLogo variant="markWithText" />
           <span className="status-badge">Тестовый режим</span>
           <p>
-            MVP-консоль для быстрого разбора инцидентов, проверки гипотез и передачи контекста между
+            Консоль для быстрого разбора инцидентов, проверки гипотез и передачи контекста между
             дежурным инженером и эскалацией.
           </p>
         </div>
 
         <nav className="site-footer__group" aria-label="Разделы лендинга">
-          <strong>Сайт</strong>
+          <strong>Возможности</strong>
           {marketingLinks.map((link) => <a key={link.href} href={link.href}>{link.label}</a>)}
         </nav>
 
         <nav className="site-footer__group" aria-label="Разделы продукта">
-          <strong>Продукт</strong>
+          <strong>Консоль</strong>
           {productLinks.map((link) => <Link key={link.href} to={link.href}>{link.label}</Link>)}
+        </nav>
+
+        <nav className="site-footer__group" aria-label="Документация продукта">
+          <strong>Справка</strong>
+          {docsLinks.map((link) => <Link key={link.href} to={link.href}>{link.label}</Link>)}
         </nav>
 
         <div className="site-footer__cta">

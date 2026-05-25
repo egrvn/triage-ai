@@ -20,6 +20,18 @@ export async function createIncident(request: APIRequestContext) {
   return body.incident.id as string;
 }
 
+export async function createScenarioIncident(request: APIRequestContext, scenarioId: string) {
+  const response = await request.post(`/api/scenarios/${scenarioId}/run`, { data: {} });
+  expect(response.ok()).toBe(true);
+  const body = await response.json();
+  return body.incident.id as string;
+}
+
+export async function resetDemo(request: APIRequestContext) {
+  const response = await request.post("/api/demo/reset", { data: {} });
+  expect(response.ok()).toBe(true);
+}
+
 export async function expectNoHorizontalScroll(page: Page) {
   const overflow = await page.evaluate(() => ({
     width: document.documentElement.clientWidth,
@@ -83,6 +95,8 @@ export async function expectCriticalBlocksNotClipped(page: Page) {
       ".incident-detail",
       ".integration-detail",
       ".copilot-panel",
+      ".incident-assistant-panel",
+      ".assistant-workspace",
       ".code-block-section"
     ];
 

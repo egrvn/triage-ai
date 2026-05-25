@@ -4,6 +4,12 @@ Triage AI — MVP-консоль для incident response. Она помогае
 
 Приложение работает в тестовом режиме: данные синтетические, реальные secrets не используются, интеграции показывают границы будущих production adapters.
 
+## Дизайн-направление
+
+Финальный интерфейс следует Cloud-like console принципам: крупный публичный вход в продукт, сервисные карточки,
+строгий app shell, компактные рабочие панели, понятная навигация и отдельная рабочая область инцидента.
+Подробный brief лежит в [`design-redesign-brief.md`](./design-redesign-brief.md).
+
 ## Быстрый старт
 
 1. Запустите проект: `npm install && npm run dev`.
@@ -76,7 +82,7 @@ AI-ассистент не является общим чатом. Он рабо
 
 Метрики проверяются на пилоте: Time to Hypothesis через A/B сравнение, RCA Coverage по post-incident документации, Adoption по логам продукта и опросам команды.
 
-## Сценарий демонстрации MVP на защите
+## Сценарий демонстрации продукта
 
 1. Открыть landing.
 2. Войти через тестовый доступ.
@@ -110,7 +116,7 @@ MVP должен запускаться без реальных secrets и custo
 
 ### Можно ли подключить реальные Prometheus/ELK?
 
-Да. Для production нужны adapters, сетевые разрешения, сервисные аккаунты и secrets management.
+Да. Для production нужны adapters, сетевые разрешения, сервисные аккаунты и secrets manager.
 
 ### Что означает низкая уверенность?
 
@@ -122,8 +128,8 @@ MVP должен запускаться без реальных secrets и custo
 
 ### Где хранятся secrets?
 
-В MVP реальные secrets не хранятся. Для production нужен внешний secrets management.
+В MVP реальные secrets не хранятся. Для production нужен внешний secrets manager.
 
 ### Что нужно для production версии?
 
-Real data sources, production auth, RBAC, audit log, observability, deployment pipeline и правила работы с secrets.
+Реальные источники данных, production auth, RBAC, audit log, observability, deployment pipeline и правила работы с secrets.

@@ -3,8 +3,12 @@ import type {
   FeedbackRequest,
   FeedbackResponse,
   DemoResetResponse,
+  EscalationEvent,
+  EscalationResponse,
   IncidentAnalysis,
+  IncidentChatMessage,
   IncidentDetail,
+  IncidentEvent,
   IncidentListItem,
   IntegrationSetting,
   TestIntegrationResponse,
@@ -28,6 +32,14 @@ function toJsonValue(value: unknown): Prisma.InputJsonValue | undefined {
   }
 
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
+
+function normalizeIncidentStatus(status: string): IncidentDetail["status"] {
+  if (status === "active") return "new";
+  if (status === "acknowledged") return "in_progress";
+  if (status === "resolved") return "closed";
+  if (status === "escalated") return "escalated";
+  return "new";
 }
 
 function toPrismaIntegrationData(setting: IntegrationSetting) {
@@ -73,7 +85,32 @@ function toIntegrationSetting(setting: {
 }
 
 export class PrismaIncidentRepository implements IncidentRepository {
+  private chatMessages = new Map<string, IncidentChatMessage[]>();
+  private escalationEvents = new Map<string, EscalationEvent[]>();
+  private incidentEvents = new Map<string, IncidentEvent[]>();
+  private incidentMeta = new Map<string, Partial<Pick<IncidentDetail, "acceptedAt" | "escalatedAt" | "closedAt" | "owner" | "escalationTarget" | "escalationReason" | "handoffSummary">>>();
+
   constructor(private readonly prisma = new PrismaClient()) {}
+
+  private addEvent(incidentId: string, event: Omit<IncidentEvent, "id" | "at"> & { at?: string }): IncidentEvent {
+    const nextEvent: IncidentEvent = {
+      id: `evt-${nowId()}`,
+      at: event.at ?? new Date().toISOString(),
+      type: event.type,
+      actor: event.actor,
+      text: event.text
+    };
+    this.incidentEvents.set(incidentId, [...(this.incidentEvents.get(incidentId) ?? []), nextEvent]);
+    return structuredClone(nextEvent);
+  }
+
+  private decorateDetail(incident: IncidentDetail): IncidentDetail {
+    return {
+      ...incident,
+      ...(this.incidentMeta.get(incident.id) ?? {}),
+      events: this.incidentEvents.get(incident.id) ?? []
+    };
+  }
 
   async listScenarios(): Promise<ScenarioSummary[]> {
     await this.ensureScenarios();
@@ -104,7 +141,7 @@ export class PrismaIncidentRepository implements IncidentRepository {
         title: scenario.alert.title,
         serviceName: scenario.serviceName,
         severity: scenario.alert.severity,
-        status: "active",
+        status: "new",
         startedAt: new Date(scenario.alert.startedAt),
         detectedAt: new Date(scenario.alert.detectedAt),
         scenarioId: scenario.id,
@@ -136,7 +173,12 @@ export class PrismaIncidentRepository implements IncidentRepository {
     if (!incident) {
       throw new Error(`Incident ${incidentId} was not created`);
     }
-    return incident;
+    this.addEvent(incidentId, {
+      type: "created",
+      actor: "Triage AI",
+      text: "Инцидент создан из демонстрационного сценария."
+    });
+    return this.decorateDetail(incident);
   }
 
   async ingestAlert(input: {
@@ -152,24 +194,31 @@ export class PrismaIncidentRepository implements IncidentRepository {
         title: input.title,
         serviceName: input.serviceName,
         severity: input.severity,
-        status: "active",
+        status: "new",
         startedAt: new Date(input.timestamp),
         detectedAt: new Date(input.timestamp)
       }
     });
 
-    return {
+    const detail = {
       id: incident.id,
       title: incident.title,
       serviceName: incident.serviceName,
       severity: incident.severity as IncidentDetail["severity"],
-      status: incident.status as IncidentDetail["status"],
+      status: normalizeIncidentStatus(incident.status),
       startedAt: dateToIso(incident.startedAt),
       detectedAt: dateToIso(incident.detectedAt),
       metrics: [],
       logs: [],
-      deploys: []
+      deploys: [],
+      events: []
     };
+    this.addEvent(incident.id, {
+      type: "created",
+      actor: "Triage AI",
+      text: "Инцидент создан из входящего alert."
+    });
+    return this.decorateDetail(detail);
   }
 
   async listIncidents(): Promise<IncidentListItem[]> {
@@ -179,9 +228,10 @@ export class PrismaIncidentRepository implements IncidentRepository {
       title: incident.title,
       serviceName: incident.serviceName,
       severity: incident.severity as IncidentListItem["severity"],
-      status: incident.status as IncidentListItem["status"],
+      status: normalizeIncidentStatus(incident.status),
       startedAt: dateToIso(incident.startedAt),
       detectedAt: dateToIso(incident.detectedAt),
+      ...(this.incidentMeta.get(incident.id) ?? {}),
       scenarioId: incident.scenarioId ?? undefined,
       summary: incident.summary ?? undefined,
       hypothesis: incident.hypothesis ?? undefined,
@@ -218,12 +268,12 @@ export class PrismaIncidentRepository implements IncidentRepository {
         }
       : undefined;
 
-    return {
+    return this.decorateDetail({
       id: incident.id,
       title: incident.title,
       serviceName: incident.serviceName,
       severity: incident.severity as IncidentDetail["severity"],
-      status: incident.status as IncidentDetail["status"],
+      status: normalizeIncidentStatus(incident.status),
       startedAt: dateToIso(incident.startedAt),
       detectedAt: dateToIso(incident.detectedAt),
       scenarioId: incident.scenarioId ?? undefined,
@@ -258,8 +308,9 @@ export class PrismaIncidentRepository implements IncidentRepository {
         author: deploy.author,
         summary: deploy.summary
       })),
+      events: [],
       analysis
-    };
+    });
   }
 
   async saveAnalysis(incidentId: string, analysis: IncidentAnalysis): Promise<IncidentDetail> {
@@ -288,6 +339,36 @@ export class PrismaIncidentRepository implements IncidentRepository {
   }
 
   async updateIncidentStatus(incidentId: string, input: UpdateIncidentStatus): Promise<IncidentDetail> {
+    const current = await this.getIncident(incidentId);
+    if (!current) {
+      throw new Error(`Incident ${incidentId} was not found`);
+    }
+    const now = new Date().toISOString();
+    const meta = this.incidentMeta.get(incidentId) ?? {};
+    const nextMeta = { ...meta };
+
+    if (input.status === "in_progress") {
+      nextMeta.acceptedAt = now;
+      nextMeta.owner = "Дежурный инженер";
+      this.addEvent(incidentId, {
+        type: current.status === "escalated" ? "returned_to_work" : "accepted",
+        actor: "Дежурный инженер",
+        text: current.status === "escalated"
+          ? "Инцидент возвращён в работу дежурному инженеру."
+          : "Инцидент принят в работу дежурным инженером."
+      });
+    }
+
+    if (input.status === "closed") {
+      nextMeta.closedAt = now;
+      this.addEvent(incidentId, {
+        type: "closed",
+        actor: "Дежурный инженер",
+        text: "Инцидент закрыт после проверки контекста."
+      });
+    }
+
+    this.incidentMeta.set(incidentId, nextMeta);
     await this.prisma.incident.update({
       where: { id: incidentId },
       data: { status: input.status }
@@ -297,7 +378,7 @@ export class PrismaIncidentRepository implements IncidentRepository {
     if (!incident) {
       throw new Error(`Incident ${incidentId} was not found`);
     }
-    return incident;
+    return this.decorateDetail(incident);
   }
 
   async saveFeedback(incidentId: string, feedback: FeedbackRequest): Promise<FeedbackResponse> {
@@ -316,6 +397,97 @@ export class PrismaIncidentRepository implements IncidentRepository {
       incidentId,
       createdAt: dateToIso(created.createdAt)
     };
+  }
+
+  async listChatMessages(incidentId: string): Promise<IncidentChatMessage[]> {
+    const incident = await this.getIncident(incidentId);
+    if (!incident) {
+      throw new Error(`Incident ${incidentId} was not found`);
+    }
+
+    return structuredClone(this.chatMessages.get(incidentId) ?? []);
+  }
+
+  async saveChatMessage(message: IncidentChatMessage): Promise<IncidentChatMessage> {
+    const incident = await this.getIncident(message.incidentId);
+    if (!incident) {
+      throw new Error(`Incident ${message.incidentId} was not found`);
+    }
+
+    const messages = this.chatMessages.get(message.incidentId) ?? [];
+    messages.push(structuredClone(message));
+    this.chatMessages.set(message.incidentId, messages);
+    return structuredClone(message);
+  }
+
+  async listEscalations(incidentId: string): Promise<EscalationEvent[]> {
+    const incident = await this.getIncident(incidentId);
+    if (!incident) {
+      throw new Error(`Incident ${incidentId} was not found`);
+    }
+
+    return structuredClone(this.escalationEvents.get(incidentId) ?? []);
+  }
+
+  async createEscalation(incidentId: string): Promise<EscalationResponse> {
+    const incident = await this.getIncident(incidentId);
+    if (!incident) {
+      throw new Error(`Incident ${incidentId} was not found`);
+    }
+
+    const now = new Date().toISOString();
+    const escalationReason = "Низкая уверенность гипотезы или требуется подтверждение другой команды.";
+    const escalationTarget = "Команда платформы / ответственная команда";
+    const handoffSummary = [
+      `Инцидент: ${incident.title}`,
+      `Сервис: ${incident.serviceName}`,
+      `Критичность: ${incident.severity}`,
+      `Confidence: ${incident.analysis?.confidence ?? incident.confidence ?? "не указана"}`,
+      `Гипотеза: ${incident.analysis?.hypothesis ?? incident.hypothesis ?? "Гипотеза не подтверждена"}`,
+      `Impact: ${incident.analysis?.summary ?? incident.summary ?? "Impact требует проверки"}`,
+      `Evidence: ${(incident.analysis?.evidence ?? []).map((item) => item.title).join("; ") || "Evidence недостаточно"}`
+    ].join("\n");
+    const escalation: EscalationEvent = {
+      id: `esc-${nowId()}`,
+      incidentId,
+      createdAt: now,
+      createdBy: "demo@triage.ai",
+      status: "sent",
+      targetRole: "escalation",
+      summary: handoffSummary,
+      reason: escalationReason,
+      evidenceRefs: (incident.analysis?.evidence ?? []).slice(0, 5).map((item) => item.id)
+    };
+    const events = this.escalationEvents.get(incidentId) ?? [];
+    this.escalationEvents.set(incidentId, [...events, escalation]);
+    this.incidentMeta.set(incidentId, {
+      ...(this.incidentMeta.get(incidentId) ?? {}),
+      escalatedAt: now,
+      escalationTarget,
+      escalationReason,
+      handoffSummary
+    });
+    this.addEvent(incidentId, {
+      type: "escalated",
+      actor: "Дежурный инженер",
+      text: "Инцидент передан на эскалацию с handoff summary, timeline и evidence."
+    });
+    const updated = await this.updateIncidentStatus(incidentId, { status: "escalated" });
+
+    return { incident: updated, escalation: structuredClone(escalation) };
+  }
+
+  async recordHandoffCopied(incidentId: string): Promise<IncidentEvent> {
+    const incident = await this.getIncident(incidentId);
+    if (!incident) {
+      throw new Error(`Incident ${incidentId} was not found`);
+    }
+
+    return this.addEvent(incidentId, {
+      type: "handoff_copied",
+      actor: "Дежурный инженер",
+      text: "Handoff summary скопирован для передачи команде."
+    });
   }
 
   async listIntegrations(): Promise<IntegrationSetting[]> {
@@ -371,6 +543,10 @@ export class PrismaIncidentRepository implements IncidentRepository {
 
   async resetDemo(): Promise<DemoResetResponse> {
     const deleted = await this.prisma.incident.deleteMany();
+    this.chatMessages.clear();
+    this.escalationEvents.clear();
+    this.incidentEvents.clear();
+    this.incidentMeta.clear();
     for (const setting of defaultIntegrationSettings) {
       await this.prisma.integrationSetting.upsert({
         where: { kind: setting.kind },

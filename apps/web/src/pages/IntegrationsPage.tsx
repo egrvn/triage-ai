@@ -178,7 +178,7 @@ function IntegrationDetails({
       </div>
 
       <div className="requirements-list">
-        <h3>Требования для production</h3>
+        <h3>Что нужно для production-подключения</h3>
         {integration.productionRequirements.length ? (
           <ul>
             {integration.productionRequirements.map((requirement) => (
@@ -195,7 +195,7 @@ function IntegrationDetails({
 
       {!integration.enabled ? (
         <div className="mock-callout">
-          Интеграция отключена. Для production-подключения потребуется настроить endpoint, credentials и secrets management.
+          Интеграция отключена. Для production-подключения потребуется настроить endpoint, credentials и secrets manager.
         </div>
       ) : null}
     </section>
@@ -225,6 +225,45 @@ export function IntegrationsPage() {
   }, [integrations, normalizedSearch]);
 
   const selectedIntegration = integrations.find((integration) => integration.kind === selectedKind) ?? filteredIntegrations[0];
+  const signalSources = filteredIntegrations.filter((integration) => ["prometheus", "elk"].includes(integration.kind));
+  const notificationChannels = filteredIntegrations.filter((integration) => ["telegram", "slack", "email"].includes(integration.kind));
+
+  const renderIntegrationCard = (integration: IntegrationSetting) => {
+    const Icon = integrationIcons[integration.kind];
+    return (
+      <article key={integration.kind} className={`integration-card ${selectedIntegration?.kind === integration.kind ? "active" : ""}`}>
+        <div className="integration-card__header">
+          <div className="integration-icon">
+            <Icon size={20} aria-hidden="true" />
+          </div>
+          <div>
+            <h2>{integration.displayName}</h2>
+            <p>{integration.description}</p>
+          </div>
+        </div>
+        <div className="integration-card__meta">
+          <StatusPill tone={integration.status}>{integrationStatusLabel(integration)}</StatusPill>
+          <span>проверка: {formatDateTime(integration.lastCheck)}</span>
+        </div>
+        <div className="integration-card__actions">
+          <Button type="button" variant="secondary" size="sm" onClick={() => setSelectedKind(integration.kind)}>
+            Подробнее
+            <ChevronRight size={15} aria-hidden="true" />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={testMutation.isPending}
+            onClick={() => testMutation.mutate(integration.kind)}
+          >
+            <Search size={15} aria-hidden="true" />
+            Проверить
+          </Button>
+        </div>
+      </article>
+    );
+  };
 
   const testMutation = useMutation({
     mutationFn: api.testIntegration,
@@ -263,43 +302,29 @@ export function IntegrationsPage() {
       </div>
 
       <div className="integrations-layout">
-        <section className="integration-grid" aria-label="Интеграции">
-          {filteredIntegrations.map((integration) => {
-            const Icon = integrationIcons[integration.kind];
-            return (
-              <article key={integration.kind} className={`integration-card ${selectedIntegration?.kind === integration.kind ? "active" : ""}`}>
-                <div className="integration-card__header">
-                  <div className="integration-icon">
-                    <Icon size={20} />
-                  </div>
-                  <div>
-                    <h2>{integration.displayName}</h2>
-                    <p>{integration.description}</p>
-                  </div>
-                </div>
-                <div className="integration-card__meta">
-                  <StatusPill tone={integration.status}>{integrationStatusLabel(integration)}</StatusPill>
-                  <span>последняя проверка: {formatDateTime(integration.lastCheck)}</span>
-                </div>
-                <div className="integration-card__actions">
-                  <Button type="button" variant="secondary" size="sm" onClick={() => setSelectedKind(integration.kind)}>
-                    Подробнее
-                    <ChevronRight size={15} />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={testMutation.isPending}
-                    onClick={() => testMutation.mutate(integration.kind)}
-                  >
-                    <Search size={15} />
-                    Проверить
-                  </Button>
-                </div>
-              </article>
-            );
-          })}
+        <section className="integration-sections" aria-label="Интеграции">
+          <div className="integration-section-block">
+            <div className="section-heading compact">
+              <span className="section-kicker">Источники сигналов</span>
+              <h2>Метрики, логи и события</h2>
+              <p>Системы, из которых собирается incident context.</p>
+            </div>
+            <div className="integration-grid">
+              {signalSources.map(renderIntegrationCard)}
+            </div>
+          </div>
+
+          <div className="integration-section-block">
+            <div className="section-heading compact">
+              <span className="section-kicker">Каналы уведомлений</span>
+              <h2>Передача статуса команде</h2>
+              <p>Каналы для дежурного инженера, эскалации и fallback-уведомлений.</p>
+            </div>
+            <div className="integration-grid">
+              {notificationChannels.map(renderIntegrationCard)}
+            </div>
+          </div>
+
           {!filteredIntegrations.length ? (
             <EmptyState title="Ничего не найдено" description="Измените запрос или фильтры и попробуйте снова." />
           ) : null}
@@ -313,7 +338,7 @@ export function IntegrationsPage() {
           onConfigure={(integration) => {
             setStatusMessage(integration.enabled
               ? "Интеграция уже работает в тестовом режиме. Для production нужны параметры из списка требований."
-              : "Для подключения в production настройте endpoint, credentials и secrets management."
+              : "Для подключения в production настройте endpoint, credentials и secrets manager."
             );
           }}
           onCopy={(payload) => {
@@ -392,6 +417,29 @@ export function IntegrationsPage() {
               </div>
             </article>
           ))}
+        </div>
+      </section>
+
+      <section className="ops-panel data-policy-section">
+        <div className="llm-provider-section__heading">
+          <div>
+            <span className="eyebrow">Политика данных</span>
+            <h2>Ключи и чувствительные данные не попадают во frontend</h2>
+            <p>
+              Тестовый контур показывает production-ready границу подключения: реальные API-ключи должны храниться в backend env
+              или secrets manager. Frontend получает только статус настройки и результат проверки подключения.
+            </p>
+          </div>
+        </div>
+        <div className="provider-info-grid">
+          <article>
+            <span>Frontend</span>
+            <strong>не принимает API-ключи</strong>
+          </article>
+          <article>
+            <span>Production</span>
+            <strong>backend env / secrets manager</strong>
+          </article>
         </div>
       </section>
     </div>

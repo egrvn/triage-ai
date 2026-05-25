@@ -2,7 +2,11 @@ import type {
   FeedbackRequest,
   FeedbackResponse,
   DemoResetResponse,
+  EscalationEvent,
+  EscalationResponse,
+  IncidentEvent,
   IncidentAnalysis,
+  IncidentChatMessage,
   IncidentDetail,
   IncidentListItem,
   IntegrationSetting,
@@ -20,6 +24,11 @@ export interface IncidentRepository {
   saveAnalysis(incidentId: string, analysis: IncidentAnalysis): Promise<IncidentDetail>;
   updateIncidentStatus(incidentId: string, input: UpdateIncidentStatus): Promise<IncidentDetail>;
   saveFeedback(incidentId: string, feedback: FeedbackRequest): Promise<FeedbackResponse>;
+  listChatMessages(incidentId: string): Promise<IncidentChatMessage[]>;
+  saveChatMessage(message: IncidentChatMessage): Promise<IncidentChatMessage>;
+  listEscalations(incidentId: string): Promise<EscalationEvent[]>;
+  createEscalation(incidentId: string): Promise<EscalationResponse>;
+  recordHandoffCopied(incidentId: string): Promise<IncidentEvent>;
   listIntegrations(): Promise<IntegrationSetting[]>;
   updateIntegration(input: UpdateIntegrationSetting): Promise<IntegrationSetting>;
   testIntegration(kind: IntegrationSetting["kind"]): Promise<TestIntegrationResponse>;

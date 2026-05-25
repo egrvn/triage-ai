@@ -61,6 +61,76 @@ describe("api routes", () => {
     await app.close();
   });
 
+  it("answers incident chat with citations and preserves history", async () => {
+    const app = await createApp({
+      repository: new MemoryIncidentRepository(),
+      config: {
+        nodeEnv: "test",
+        host: "127.0.0.1",
+        port: 0,
+        storageMode: "memory",
+        corsOrigin: "*"
+      }
+    });
+
+    const scenario = await app.inject({
+      method: "POST",
+      url: "/api/scenarios/release-regression-5xx/run"
+    });
+    const incidentId = scenario.json().incident.id;
+
+    const chatResponse = await app.inject({
+      method: "POST",
+      url: `/api/incidents/${incidentId}/chat`,
+      payload: { message: "Что проверить первым?" }
+    });
+
+    expect(chatResponse.statusCode).toBe(200);
+    expect(chatResponse.json().message.citations.length).toBeGreaterThan(0);
+    expect(chatResponse.json().message.auditId).toMatch(/^audit-/);
+
+    const historyResponse = await app.inject({
+      method: "GET",
+      url: `/api/incidents/${incidentId}/chat`
+    });
+
+    expect(historyResponse.statusCode).toBe(200);
+    expect(historyResponse.json()).toHaveLength(2);
+
+    await app.close();
+  });
+
+  it("does not invent a root cause for low-confidence chat", async () => {
+    const app = await createApp({
+      repository: new MemoryIncidentRepository(),
+      config: {
+        nodeEnv: "test",
+        host: "127.0.0.1",
+        port: 0,
+        storageMode: "memory",
+        corsOrigin: "*"
+      }
+    });
+
+    const scenario = await app.inject({
+      method: "POST",
+      url: "/api/scenarios/low-confidence-sparse-data/run"
+    });
+    const incidentId = scenario.json().incident.id;
+
+    const chatResponse = await app.inject({
+      method: "POST",
+      url: `/api/incidents/${incidentId}/chat`,
+      payload: { message: "Объясни гипотезу", quickCommand: "Объясни гипотезу" }
+    });
+
+    expect(chatResponse.statusCode).toBe(200);
+    expect(chatResponse.json().message.content).toContain("Недостаточно сигналов для уверенной гипотезы");
+    expect(chatResponse.json().message.content).not.toContain("Вероятная причина");
+
+    await app.close();
+  });
+
   it("updates incident status, resets demo data, and tests integration connection", async () => {
     const app = await createApp({
       repository: new MemoryIncidentRepository(),
@@ -82,11 +152,20 @@ describe("api routes", () => {
     const statusResponse = await app.inject({
       method: "PATCH",
       url: `/api/incidents/${incidentId}/status`,
-      payload: { status: "acknowledged" }
+      payload: { status: "in_progress" }
     });
 
     expect(statusResponse.statusCode).toBe(200);
-    expect(statusResponse.json().status).toBe("acknowledged");
+    expect(statusResponse.json().status).toBe("in_progress");
+
+    const legacyStatusResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/incidents/${incidentId}/status`,
+      payload: { status: "acknowledged" }
+    });
+
+    expect(legacyStatusResponse.statusCode).toBe(200);
+    expect(legacyStatusResponse.json().status).toBe("in_progress");
 
     const integrationResponse = await app.inject({
       method: "POST",
@@ -110,6 +189,51 @@ describe("api routes", () => {
       url: "/api/incidents"
     });
     expect(incidents.json()).toEqual([]);
+
+    await app.close();
+  });
+
+  it("creates escalation events and updates incident status", async () => {
+    const app = await createApp({
+      repository: new MemoryIncidentRepository(),
+      config: {
+        nodeEnv: "test",
+        host: "127.0.0.1",
+        port: 0,
+        storageMode: "memory",
+        corsOrigin: "*"
+      }
+    });
+
+    const scenario = await app.inject({
+      method: "POST",
+      url: "/api/scenarios/release-regression-5xx/run"
+    });
+    const incidentId = scenario.json().incident.id;
+
+    const escalationResponse = await app.inject({
+      method: "POST",
+      url: `/api/incidents/${incidentId}/escalations`
+    });
+
+    expect(escalationResponse.statusCode).toBe(200);
+    expect(escalationResponse.json().incident.status).toBe("escalated");
+    expect(escalationResponse.json().escalation.evidenceRefs.length).toBeGreaterThan(0);
+
+    const incidentsResponse = await app.inject({
+      method: "GET",
+      url: "/api/incidents"
+    });
+    expect(incidentsResponse.statusCode).toBe(200);
+    expect(incidentsResponse.json()[0].status).toBe("escalated");
+
+    const historyResponse = await app.inject({
+      method: "GET",
+      url: `/api/incidents/${incidentId}/escalations`
+    });
+
+    expect(historyResponse.statusCode).toBe(200);
+    expect(historyResponse.json()).toHaveLength(1);
 
     await app.close();
   });

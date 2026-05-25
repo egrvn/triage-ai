@@ -1,4 +1,5 @@
-import type { IncidentDetail, IncidentListItem, IncidentStatus, LogEvent } from "@triage-ai/shared";
+import type { IncidentDetail, IncidentEvent, IncidentListItem, IncidentStatus, LogEvent, MetricPoint } from "@triage-ai/shared";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Area,
   AreaChart,
@@ -11,33 +12,32 @@ import {
 } from "recharts";
 import {
   ArrowUpRight,
-  Bot,
   CheckCircle2,
   ClipboardCheck,
   Copy,
-  Clock3,
   GitBranch,
-  MessageSquareText,
   ShieldAlert,
   Sparkles,
   XCircle
 } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { EmptyState } from "@/components/EmptyState";
-import { StatusPill } from "@/components/StatusPill";
+import { ConfidenceBadge, SeverityBadge, StatusBadge, StatusPill } from "@/components/StatusPill";
 import { Button } from "@/components/ui/button";
-import { confidenceLabel, formatClock, severityLabel, statusLabel } from "@/lib/labels";
+import { api } from "@/lib/api";
+import { confidenceLabel, formatClock, statusLabel } from "@/lib/labels";
 import { roleCopy, type IncidentTrendPoint, type RoleMode } from "./incident-workspace";
+import { IncidentAssistantPanel } from "./assistant";
 
 export function includesQuery(value: string | undefined, query: string) {
   return (value ?? "").toLowerCase().includes(query);
 }
 
 export function actionLabel(status: IncidentStatus) {
-  if (status === "acknowledged") return "Принят в работу";
-  if (status === "escalated") return "Эскалирован";
-  if (status === "resolved") return "Закрыт";
-  return "Активен";
+  if (status === "in_progress") return "В работе";
+  if (status === "escalated") return "На эскалации";
+  if (status === "closed") return "Закрыт";
+  return "Новый";
 }
 
 function evidenceKindLabel(kind: "metric" | "log" | "deploy") {
@@ -56,163 +56,56 @@ function scrollToEvidence(targetId: string) {
   document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
-type CopilotMessage = {
-  id: string;
-  role: "assistant" | "user";
-  content: string;
-  citations: Array<{ id: string; label: string; targetId: string }>;
-  confidence?: string;
-  suggestedActions?: string[];
-  auditId?: string;
-};
-
-const quickCommands = [
-  "Объясни гипотезу",
-  "Покажи ключевые логи",
-  "Что изменилось перед инцидентом?",
-  "Что проверить первым?",
-  "Подготовь сводку для эскалации"
-];
-
-function buildCopilotAnswer(incident: IncidentDetail, command: string): CopilotMessage {
-  const evidence = incident.analysis?.evidence ?? [];
-  const topEvidence = evidence.slice(0, 3);
-  const keyLogs = incident.logs.filter((log) => log.level === "error" || log.level === "warn").slice(0, 2);
-  const keyMetrics = incident.metrics.slice(0, 2);
-  const deploy = incident.deploys[0];
-  const citations = [
-    ...topEvidence.map((item) => ({
-      id: item.id,
-      label: item.title,
-      targetId: evidenceTargetId(item.kind, item.refId)
-    })),
-    ...keyLogs.map((log) => ({
-      id: log.id,
-      label: `лог ${log.level}`,
-      targetId: `log-${log.id}`
-    })),
-    ...keyMetrics.map((metric) => ({
-      id: metric.id,
-      label: metric.name,
-      targetId: `metric-${metric.id}`
-    }))
-  ].slice(0, 4);
-  const confidence = incident.analysis?.confidence ?? incident.confidence ?? "low";
-
-  if (confidence === "low") {
-    return {
-      id: crypto.randomUUID(),
-      role: "assistant",
-      content: "Недостаточно сигналов для уверенной гипотезы. Я не буду утверждать root cause без подтверждения: проверьте дополнительные логи, метрики сервиса и последние deploy events вручную.",
-      citations,
-      confidence: confidenceLabel(confidence),
-      suggestedActions: ["Собрать дополнительные логи", "Проверить недостающие метрики", "Передать контекст на эскалацию"],
-      auditId: `audit-${Date.now().toString(36)}`
-    };
-  }
-
-  const hypothesis = incident.analysis?.hypothesis ?? incident.hypothesis ?? "Гипотеза причины пока не сформирована.";
-  const nextStep = incident.analysis?.nextStep ?? "Проверьте подтверждающие данные и выберите безопасное действие.";
-  let content = `Гипотеза основана на текущем incident context: ${hypothesis}`;
-
-  if (command.includes("логи")) {
-    content = keyLogs.length
-      ? `Ключевые логи указывают на деградацию ${incident.serviceName}: ${keyLogs.map((log) => log.message).join(" | ")}.`
-      : "В текущем контексте нет error/warn логов. Проверьте ELK вручную и расширьте временное окно.";
-  } else if (command.includes("изменилось")) {
-    content = deploy
-      ? `Перед инцидентом было развертывание ${deploy.version} из ветки ${deploy.branch}. Сопоставьте его timestamp с ростом метрик и burst логов.`
-      : "В контексте нет deploy events. Проверьте историю развертываний вручную.";
-  } else if (command.includes("проверить первым")) {
-    content = `Первым шагом проверьте самое сильное evidence: ${topEvidence[0]?.title ?? keyMetrics[0]?.name ?? "метрики сервиса"}. Затем выполните действие: ${nextStep}`;
-  } else if (command.includes("summary") || command.includes("сводк")) {
-    content = `Сводка для эскалации: ${incident.title}. Сервис: ${incident.serviceName}. Гипотеза: ${hypothesis}. Следующий шаг: ${nextStep}`;
-  }
-
-  return {
-    id: crypto.randomUUID(),
-    role: "assistant",
-    content,
-    citations,
-    confidence: confidenceLabel(confidence),
-    suggestedActions: [nextStep, "Сверить timeline", "Зафиксировать handoff-контекст"],
-    auditId: `audit-${Date.now().toString(36)}`
-  };
-}
-
-function IncidentCopilotPanel({ incident }: { incident: IncidentDetail }) {
-  const initialMessage = useMemo<CopilotMessage>(() => ({
-    id: "initial",
-    role: "assistant",
-    content: `Я работаю только с контекстом ${incident.id}. Могу объяснить гипотезу, показать ключевые подтверждающие данные и подготовить сводку для эскалации.`,
-    citations: [],
-    confidence: incident.confidence ? confidenceLabel(incident.confidence) : undefined,
-    auditId: `audit-${incident.id}`
-  }), [incident.confidence, incident.id]);
-  const [messages, setMessages] = useState<CopilotMessage[]>([initialMessage]);
-
-  const ask = (command: string) => {
-    const userMessage: CopilotMessage = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content: command,
-      citations: []
-    };
-    const answer = buildCopilotAnswer(incident, command);
-    setMessages((current) => [...current, userMessage, answer]);
-  };
+function DetailDialog({
+  title,
+  summary,
+  triggerLabel = "Подробнее",
+  children
+}: {
+  title: string;
+  summary: string;
+  triggerLabel?: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const dialogId = `detail-dialog-${title.toLowerCase().replace(/[^a-zа-я0-9]+/gi, "-")}`;
 
   return (
-    <aside className="incident-copilot-panel" aria-label="AI-ассистент по инциденту">
-      <div className="incident-copilot-panel__header">
-        <div>
-          <span className="eyebrow">Подтверждающие данные</span>
-          <h2>AI-ассистент</h2>
-          <p>Контекст: {incident.id}</p>
-        </div>
-        <Bot size={20} aria-hidden="true" />
-      </div>
-
-      <div className="copilot-commands" aria-label="Быстрые команды AI-ассистента">
-        {quickCommands.map((command) => (
-          <button key={command} type="button" onClick={() => ask(command)}>
-            <MessageSquareText size={14} aria-hidden="true" />
-            {command}
-          </button>
-        ))}
-        <button type="button" disabled title="Roadmap">
-          Сформируй черновик постмортема
-        </button>
-      </div>
-
-      <div className="copilot-thread" aria-live="polite">
-        {messages.map((message) => (
-          <article key={message.id} className={`copilot-message ${message.role}`}>
-            <p>{message.content}</p>
-            {message.citations.length ? (
-              <div className="copilot-citations">
-                {message.citations.map((citation) => (
-                  <button key={`${message.id}-${citation.id}`} type="button" onClick={() => scrollToEvidence(citation.targetId)}>
-                    {citation.label}
-                  </button>
-                ))}
+    <>
+      <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(true)}>
+        {triggerLabel}
+      </Button>
+      {open ? (
+        <div className="detail-dialog-backdrop" role="presentation" onMouseDown={() => setOpen(false)}>
+          <section
+            className="detail-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={dialogId}
+            aria-describedby={`${dialogId}-summary`}
+            tabIndex={-1}
+            onMouseDown={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") setOpen(false);
+            }}
+          >
+            <div className="detail-dialog__header">
+              <div>
+                <span className="eyebrow">Детали</span>
+                <h3 id={dialogId}>{title}</h3>
+                <p id={`${dialogId}-summary`}>{summary}</p>
               </div>
-            ) : null}
-            {message.role === "assistant" ? (
-              <footer>
-                {message.confidence ? <span>{message.confidence}</span> : null}
-                {message.auditId ? <code>{message.auditId}</code> : null}
-              </footer>
-            ) : null}
-            {message.suggestedActions?.length ? (
-              <ul>
-                {message.suggestedActions.map((action) => <li key={action}>{action}</li>)}
-              </ul>
-            ) : null}
-          </article>
-        ))}
-      </div>
-    </aside>
+              <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>
+                Закрыть
+              </Button>
+            </div>
+            <div className="detail-dialog__body">
+              {children}
+            </div>
+          </section>
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -220,8 +113,8 @@ export function MetricCard({ label, value, caption, icon }: { label: string; val
   return (
     <article className="metric-card">
       <div className="metric-card__icon" aria-hidden="true">{icon}</div>
-      <div>
-        <span>{label}</span>
+      <div className="metric-card__content">
+        <span title={label}>{label}</span>
         <strong>{value}</strong>
         <small>{caption}</small>
       </div>
@@ -238,23 +131,60 @@ export function IncidentActions({
   disabled?: boolean;
   onStatus: (id: string, status: IncidentStatus) => void;
 }) {
+  if (incident.status === "closed") {
+    return (
+      <div className="incident-actions incident-actions--readonly">
+        <span>Детали доступны для просмотра</span>
+      </div>
+    );
+  }
+
+  if (incident.status === "escalated") {
+    return (
+      <div className="incident-actions">
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          disabled={disabled}
+          onClick={() => onStatus(incident.id, "in_progress")}
+        >
+          <ClipboardCheck size={15} aria-hidden="true" />
+          Вернуть в работу
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={disabled}
+          onClick={() => onStatus(incident.id, "closed")}
+        >
+          <XCircle size={15} aria-hidden="true" />
+          Закрыть
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="incident-actions">
-      <Button
-        type="button"
-        size="sm"
-        variant="secondary"
-        disabled={disabled || incident.status === "acknowledged" || incident.status === "resolved"}
-        onClick={() => onStatus(incident.id, "acknowledged")}
-      >
-        <ClipboardCheck size={15} aria-hidden="true" />
-        Принять в работу
-      </Button>
+      {incident.status === "new" ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          disabled={disabled}
+          onClick={() => onStatus(incident.id, "in_progress")}
+        >
+          <ClipboardCheck size={15} aria-hidden="true" />
+          Принять в работу
+        </Button>
+      ) : null}
       <Button
         type="button"
         size="sm"
         variant="outline"
-        disabled={disabled || incident.status === "escalated" || incident.status === "resolved"}
+        disabled={disabled}
         onClick={() => onStatus(incident.id, "escalated")}
       >
         <ArrowUpRight size={15} aria-hidden="true" />
@@ -264,8 +194,8 @@ export function IncidentActions({
         type="button"
         size="sm"
         variant="ghost"
-        disabled={disabled || incident.status === "resolved"}
-        onClick={() => onStatus(incident.id, "resolved")}
+        disabled={disabled}
+        onClick={() => onStatus(incident.id, "closed")}
       >
         <XCircle size={15} aria-hidden="true" />
         Закрыть
@@ -353,14 +283,328 @@ export function IncidentSummaryCard({
         <span>
           <strong>{incident.title}</strong>
           <small>{incident.serviceName} · {formatClock(incident.detectedAt)}</small>
+          {incident.summary ? <em>{incident.summary}</em> : null}
         </span>
         <span className="incident-row__badges">
-          <StatusPill tone={incident.severity}>{severityLabel(incident.severity)}</StatusPill>
-          <StatusPill tone={incident.status}>{statusLabel(incident.status)}</StatusPill>
+          <SeverityBadge severity={incident.severity} />
+          <StatusBadge status={incident.status} />
         </span>
+        <span className="incident-row__open">Открыть</span>
       </button>
       <IncidentActions incident={incident} disabled={statusBusy} onStatus={onStatus} />
     </article>
+  );
+}
+
+function evidenceChipLabel(title: string) {
+  return title
+    .replace("Связь с недавним развертыванием", "Связь с deploy")
+    .replace("Релевантный error log", "Error log")
+    .replace("Всплеск HTTP 5xx", "HTTP 5xx");
+}
+
+function MetricsPreview({ metrics }: { metrics: MetricPoint[] }) {
+  return (
+    <article className="data-preview-card" id="incident-metrics">
+      <div className="data-preview-card__header">
+        <div>
+          <h3>Метрики</h3>
+          <p>Короткий срез ключевых сигналов. Полная таблица открывается отдельно.</p>
+        </div>
+        <DetailDialog title="Метрики инцидента" summary="Полный список метрик выбранного инцидента." triggerLabel="Открыть метрики">
+          <div className="data-table-scroll">
+            <table className="incident-data-table">
+              <thead>
+                <tr>
+                  <th>Время</th>
+                  <th>Метрика</th>
+                  <th>Значение</th>
+                  <th>Единица</th>
+                  <th>Контекст</th>
+                </tr>
+              </thead>
+              <tbody>
+                {metrics.map((metric) => (
+                  <tr key={metric.id}>
+                    <td><time>{formatClock(metric.timestamp)}</time></td>
+                    <td><code title={metric.name}>{metric.name}</code></td>
+                    <td><code>{metric.value}</code></td>
+                    <td>{metric.unit}</td>
+                    <td>{metric.serviceName}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </DetailDialog>
+      </div>
+      <div className="metrics-preview-list">
+        {metrics.slice(0, 4).map((metric) => (
+          <div key={metric.id} id={`metric-${metric.id}`} className="metric-preview-row">
+            <time>{formatClock(metric.timestamp)}</time>
+            <code title={metric.name}>{metric.name}</code>
+            <strong>{metric.value} {metric.unit}</strong>
+          </div>
+        ))}
+        {!metrics.length ? <p className="muted-copy">Метрики в карточке отсутствуют.</p> : null}
+      </div>
+    </article>
+  );
+}
+
+function LogsPreview({ logs }: { logs: LogEvent[] }) {
+  return (
+    <article className="data-preview-card" id="incident-logs">
+      <div className="data-preview-card__header">
+        <div>
+          <h3>Логи</h3>
+          <p>Последние релевантные записи. Полный список открыт в отдельном окне.</p>
+        </div>
+        <DetailDialog title="Логи инцидента" summary="Полный список логов выбранного инцидента." triggerLabel="Открыть логи">
+          <div className="log-dialog-list">
+            {logs.map((log) => (
+              <pre key={log.id} id={`log-dialog-${log.id}`}><code>[{formatClock(log.timestamp)}] {log.level.toUpperCase()} {log.serviceName}: {log.message}</code></pre>
+            ))}
+            {!logs.length ? <p className="muted-copy">По текущим фильтрам логи не найдены.</p> : null}
+          </div>
+        </DetailDialog>
+      </div>
+      <div className="log-preview-list">
+        {logs.slice(0, 3).map((log) => (
+          <div key={log.id} id={`log-${log.id}`} className="log-preview-row">
+            <time>{formatClock(log.timestamp)}</time>
+            <StatusPill tone={log.level === "error" ? "critical" : log.level === "warn" ? "warning" : "adapter"}>{log.level}</StatusPill>
+            <code>{log.serviceName}</code>
+            <span title={log.message}>{log.message}</span>
+          </div>
+        ))}
+        {!logs.length ? <p className="muted-copy">По текущим фильтрам логи не найдены.</p> : null}
+      </div>
+    </article>
+  );
+}
+
+function IncidentTimeline({
+  incident
+}: {
+  incident: IncidentDetail;
+}) {
+  const incidentEventCopy: Record<IncidentEvent["type"], { type: string; title: string; source: string; tone: string }> = {
+    created: {
+      type: "Incident",
+      title: "Инцидент создан",
+      source: "system",
+      tone: "metric"
+    },
+    accepted: {
+      type: "User action",
+      title: "Инцидент принят в работу",
+      source: "on-call",
+      tone: "ai"
+    },
+    escalated: {
+      type: "Escalation",
+      title: "Контекст передан на эскалацию",
+      source: "handoff",
+      tone: "escalation"
+    },
+    closed: {
+      type: "User action",
+      title: "Инцидент закрыт",
+      source: "on-call",
+      tone: "closed"
+    },
+    returned_to_work: {
+      type: "User action",
+      title: "Инцидент возвращён в работу",
+      source: "escalation",
+      tone: "ai"
+    },
+    handoff_copied: {
+      type: "Handoff",
+      title: "Handoff summary скопирован",
+      source: "clipboard",
+      tone: "escalation"
+    }
+  };
+  const events = [
+    ...incident.events.map((event) => {
+      const copy = incidentEventCopy[event.type];
+      return {
+        id: `incident-event-${event.id}`,
+        timestamp: event.at,
+        type: copy.type,
+        title: copy.title,
+        description: event.text,
+        source: copy.source,
+        tone: copy.tone
+      };
+    }),
+    ...incident.deploys.map((event) => ({
+      id: `deploy-${event.id}`,
+      timestamp: event.timestamp,
+      type: "Deploy event",
+      title: event.version,
+      description: `${event.branch} · ${event.summary}`,
+      source: "deploy",
+      tone: "deploy"
+    })),
+    ...incident.metrics.map((event) => ({
+      id: `timeline-metric-${event.id}`,
+      timestamp: event.timestamp,
+      type: "Metric spike",
+      title: event.name,
+      description: `${event.value} ${event.unit} · ${event.serviceName}`,
+      source: "metric",
+      tone: "metric"
+    })),
+    ...incident.logs.map((event) => ({
+      id: `timeline-log-${event.id}`,
+      timestamp: event.timestamp,
+      type: "Log burst",
+      title: event.level.toUpperCase(),
+      description: event.message,
+      source: event.source,
+      tone: "log"
+    })),
+    ...(incident.analysis ? [{
+      id: `analysis-${incident.id}`,
+      timestamp: incident.detectedAt,
+      type: "AI analysis",
+      title: "AI-сводка сформирована",
+      description: incident.analysis.hypothesis,
+      source: "ai",
+      tone: "ai"
+    }] : []),
+  ].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+
+  return (
+    <section className="timeline-section" id="incident-timeline">
+      <div className="section-heading compact">
+        <h3>Хронология</h3>
+        <p>Единая линия событий: deploy, метрики, логи, AI-анализ и действия инженера.</p>
+      </div>
+      <ol className="incident-timeline-list">
+        {events.map((event) => (
+          <li key={event.id} id={event.id} className={`incident-timeline-item ${event.tone}`}>
+            <time>{formatClock(event.timestamp)}</time>
+            <span className="timeline-dot" aria-hidden="true" />
+            <article>
+              <div>
+                <StatusPill tone={event.tone === "escalation" ? "escalated" : event.tone === "closed" ? "closed" : event.tone === "deploy" ? "adapter" : event.tone === "log" ? "critical" : "healthy"}>{event.type}</StatusPill>
+                <small>{event.source}</small>
+              </div>
+              <h4>{event.title}</h4>
+              <p>{event.description}</p>
+            </article>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+function RoleGuidanceCard({
+  role,
+  nextStep
+}: {
+  role: RoleMode;
+  nextStep?: string;
+}) {
+  const copy = roleCopy[role];
+  const actions = (nextStep ? [nextStep, ...copy.actions] : copy.actions).slice(0, 4);
+
+  return (
+    <section className="role-guidance-card" id="incident-actions">
+      <div className="role-guidance-card__header">
+        <div className="metric-card__icon" aria-hidden="true">
+          {role === "on-call" ? <ShieldAlert size={20} /> : <ClipboardCheck size={20} />}
+        </div>
+        <div>
+          <span className="eyebrow">{copy.title}</span>
+          <h3>{role === "on-call" ? "Сфокусируйтесь на impact и ближайшем безопасном действии" : "Передайте команде полный контекст и evidence"}</h3>
+          <p>{copy.hint}</p>
+        </div>
+      </div>
+      <ul>
+        {actions.map((action) => (
+          <li key={action}>
+            <CheckCircle2 size={16} aria-hidden="true" />
+            <span>{action}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function EscalationSection({
+  events,
+  summary,
+  copyBusy,
+  onCopyHandoff
+}: {
+  events: IncidentEvent[];
+  summary: string;
+  copyBusy?: boolean;
+  onCopyHandoff?: () => Promise<unknown> | void;
+}) {
+  const [copyStatus, setCopyStatus] = useState("");
+  const escalationEvents = events.filter((event) =>
+    event.type === "escalated" || event.type === "handoff_copied" || event.type === "returned_to_work"
+  );
+
+  return (
+    <section className="escalation-section" id="incident-escalation">
+      <div className="section-heading compact">
+        <h3>События эскалации</h3>
+        <p>Handoff-события, созданные из текущего incident context.</p>
+      </div>
+      {escalationEvents.length ? (
+        <div className="escalation-list">
+          {escalationEvents.map((event) => (
+            <article key={event.id} className="escalation-card">
+              <div className="escalation-card__header">
+                <div>
+                  <StatusBadge status="escalated" />
+                  <time>{formatClock(event.at)}</time>
+                </div>
+                <StatusPill tone={event.type === "returned_to_work" ? "in_progress" : "escalated"}>
+                  {event.type === "handoff_copied" ? "summary скопирован" : event.type === "returned_to_work" ? "возвращён" : "handoff"}
+                </StatusPill>
+              </div>
+              <h4>{event.text}</h4>
+              {event.type === "escalated" ? <pre><code>{summary}</code></pre> : null}
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p className="muted-copy">Событий эскалации пока нет. Нажмите «Эскалировать», чтобы зафиксировать handoff-событие.</p>
+      )}
+      <div className="incident-actions">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={copyBusy}
+          onClick={async () => {
+            try {
+              if (navigator.clipboard) {
+                await navigator.clipboard.writeText(summary).catch(() => undefined);
+              }
+              await onCopyHandoff?.();
+              setCopyStatus("Handoff summary скопирован");
+            } catch {
+              setCopyStatus("Не удалось скопировать автоматически.");
+            }
+          }}
+        >
+          <Copy size={14} aria-hidden="true" />
+          Скопировать handoff summary
+        </Button>
+      </div>
+      {copyStatus ? <div className="inline-status small" role="status">{copyStatus}</div> : null}
+    </section>
   );
 }
 
@@ -381,8 +625,22 @@ export function IncidentDetailSections({
   statusBusy?: boolean;
   workspaceMode?: boolean;
 }) {
-  const [explainOpen, setExplainOpen] = useState(workspaceMode);
+  const [explainOpen, setExplainOpen] = useState(false);
   const [copyStatus, setCopyStatus] = useState("");
+  const queryClient = useQueryClient();
+  const handoffCopyMutation = useMutation({
+    mutationFn: async () => {
+      if (!incident) throw new Error("incident_not_selected");
+      return api.recordHandoffCopied(incident.id);
+    },
+    onSuccess: () => {
+      if (!incident) return;
+      void queryClient.invalidateQueries({ queryKey: ["incident", incident.id] });
+      void queryClient.invalidateQueries({ queryKey: ["incidents"] });
+      setCopyStatus("Handoff summary скопирован");
+    },
+    onError: () => setCopyStatus("Не удалось зафиксировать handoff-событие.")
+  });
 
   if (!incident) {
     return (
@@ -396,9 +654,17 @@ export function IncidentDetailSections({
   }
 
   const analysis = incident.analysis;
-  const copy = roleCopy[role];
   const latestDeploy = incident.deploys[0];
   const visibleLogs = logs ?? incident.logs;
+  const tabs = [
+    { label: "Сводка", href: "#incident-summary" },
+    { label: "Хронология", href: "#incident-timeline" },
+    { label: "Метрики", href: "#incident-metrics" },
+    { label: "Логи", href: "#incident-logs" },
+    { label: "Evidence", href: "#incident-evidence" },
+    { label: "Эскалация", href: "#incident-escalation" },
+    { label: "Действия", href: "#incident-actions" }
+  ];
   const escalationSummary = [
     `Инцидент: ${incident.title}`,
     `Сервис: ${incident.serviceName}`,
@@ -417,9 +683,9 @@ export function IncidentDetailSections({
           <p>{incident.serviceName} · обнаружен {formatClock(incident.detectedAt)}</p>
         </div>
         <div className="incident-header__badges">
-          <StatusPill tone={incident.severity}>{severityLabel(incident.severity)}</StatusPill>
-          <StatusPill tone={incident.status}>{statusLabel(incident.status)}</StatusPill>
-          {incident.confidence ? <StatusPill tone={incident.confidence}>{confidenceLabel(incident.confidence)}</StatusPill> : null}
+          <SeverityBadge severity={incident.severity} />
+          <StatusBadge status={incident.status} />
+          {incident.confidence ? <ConfidenceBadge confidence={incident.confidence} /> : null}
         </div>
       </div>
 
@@ -441,8 +707,13 @@ export function IncidentDetailSections({
           variant="secondary"
           size="sm"
           onClick={() => {
-            void navigator.clipboard?.writeText(escalationSummary);
-            setCopyStatus("Summary скопирован для эскалации");
+            if (!navigator.clipboard) {
+              setCopyStatus("Clipboard недоступен: выделите сводку в деталях инцидента вручную");
+              return;
+            }
+            navigator.clipboard.writeText(escalationSummary)
+              .then(() => setCopyStatus("Summary скопирован для эскалации"))
+              .catch(() => setCopyStatus("Не удалось скопировать автоматически. Выделите сводку вручную."));
           }}
         >
           <Copy size={14} aria-hidden="true" />
@@ -452,32 +723,68 @@ export function IncidentDetailSections({
       {copyStatus ? <div className="inline-status small" role="status">{copyStatus}</div> : null}
 
       <div className="incident-analysis-tabs" aria-label="Разделы анализа">
-        {["Сводка", "Хронология", "Метрики", "Логи", "Подтверждающие данные", "Действия"].map((item) => (
-          <a key={item} href={`#incident-${item.toLowerCase().replace(/\s+/g, "-")}`}>{item}</a>
+        {tabs.map((item) => (
+          <a key={item.href} href={item.href}>{item.label}</a>
         ))}
       </div>
 
-      <div className="analysis-grid" id="incident-сводка">
-        <article className="analysis-card primary">
-          <Sparkles size={18} aria-hidden="true" />
-          <h3>Сводка ИИ</h3>
-          <p>{analysis?.summary ?? incident.summary ?? "Сводка ИИ пока не сформирована."}</p>
-        </article>
-        <article className="analysis-card">
-          <ShieldAlert size={18} aria-hidden="true" />
-          <h3>Гипотеза причины</h3>
-          <p>{analysis?.hypothesis ?? incident.hypothesis ?? "Недостаточно контекста для гипотезы причины."}</p>
-        </article>
-        <article className="analysis-card">
-          <GitBranch size={18} aria-hidden="true" />
-          <h3>Связь с развертыванием</h3>
-          {latestDeploy ? (
-            <p>Последнее развертывание: {latestDeploy.version} · {latestDeploy.branch} · {formatClock(latestDeploy.timestamp)}</p>
-          ) : (
-            <p>Контекст развертывания отсутствует. Проверьте логи и метрики вручную.</p>
-          )}
-        </article>
-      </div>
+      <section className="ai-summary-panel" id="incident-summary" aria-labelledby="ai-summary-title">
+        <div className="section-heading compact">
+          <span className="eyebrow">AI-сводка</span>
+          <h3 id="ai-summary-title">Что важно понять в первые минуты</h3>
+        </div>
+        <div className="ai-summary-list">
+          <article>
+            <Sparkles size={18} aria-hidden="true" />
+            <div>
+              <h4>Что произошло</h4>
+              <p>{analysis?.summary ?? incident.summary ?? "Сводка ИИ пока не сформирована."}</p>
+            </div>
+            <DetailDialog title="Что произошло" summary="Краткая AI-сводка по выбранному инциденту.">
+              <p>{analysis?.summary ?? incident.summary ?? "Сводка ИИ пока не сформирована."}</p>
+              <p>Сервис: <code>{incident.serviceName}</code>. Статус: {statusLabel(incident.status)}.</p>
+            </DetailDialog>
+          </article>
+          <article>
+            <ShieldAlert size={18} aria-hidden="true" />
+            <div>
+              <h4>Гипотеза причины</h4>
+              <p>{analysis?.hypothesis ?? incident.hypothesis ?? "Недостаточно контекста для гипотезы причины."}</p>
+            </div>
+            <DetailDialog title="Гипотеза причины" summary="Почему система предлагает именно эту гипотезу.">
+              <p>{analysis?.hypothesis ?? incident.hypothesis ?? "Недостаточно контекста для гипотезы причины."}</p>
+              <ul>
+                {(analysis?.reasoning ?? ["Недостаточно reasoning-сигналов: проверьте метрики, логи и развертывания вручную."]).map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </DetailDialog>
+          </article>
+          <article>
+            <GitBranch size={18} aria-hidden="true" />
+            <div>
+              <h4>Связь с развертыванием</h4>
+              {latestDeploy ? (
+                <p>Последнее развертывание: <code>{latestDeploy.version}</code>, ветка <code>{latestDeploy.branch}</code>, {formatClock(latestDeploy.timestamp)}.</p>
+              ) : (
+                <p>Контекст развертывания отсутствует. Проверьте логи и метрики вручную.</p>
+              )}
+            </div>
+            <DetailDialog title="Связь с развертыванием" summary="Deploy context и связь с timeline инцидента.">
+              {latestDeploy ? (
+                <dl className="dialog-data-list">
+                  <div><dt>Версия</dt><dd><code>{latestDeploy.version}</code></dd></div>
+                  <div><dt>Ветка</dt><dd><code>{latestDeploy.branch}</code></dd></div>
+                  <div><dt>Commit</dt><dd><code>{latestDeploy.commitSha}</code></dd></div>
+                  <div><dt>Summary</dt><dd>{latestDeploy.summary}</dd></div>
+                </dl>
+              ) : (
+                <p>Deploy events в карточке отсутствуют.</p>
+              )}
+            </DetailDialog>
+          </article>
+        </div>
+      </section>
 
       <div className="explainability-panel">
         <button type="button" onClick={() => setExplainOpen((open) => !open)} aria-expanded={explainOpen}>
@@ -496,61 +803,35 @@ export function IncidentDetailSections({
             </div>
             <div>
               <h3>Ссылки на evidence</h3>
-              <div className="copilot-citations">
+              <div className="copilot-citations explainability-citations">
                 {(analysis?.evidence ?? []).slice(0, 5).map((item) => (
-                  <button key={item.id} type="button" onClick={() => scrollToEvidence(evidenceTargetId(item.kind, item.refId))}>
-                    {item.title}
+                  <button
+                    key={item.id}
+                    type="button"
+                    title={item.title}
+                    onClick={() => scrollToEvidence(evidenceTargetId(item.kind, item.refId))}
+                  >
+                    {evidenceChipLabel(item.title)}
                   </button>
                 ))}
               </div>
-              <p>Контр-сигналы: если сигнал неполный или confidence низкая, гипотеза требует ручной проверки и не считается доказанной причиной.</p>
+              <div className="counter-signal-callout">
+                <strong>Контр-сигналы</strong>
+                <p>Если сигнал неполный или confidence низкая, гипотеза требует ручной проверки и не считается доказанной причиной.</p>
+              </div>
             </div>
           </div>
         ) : null}
       </div>
 
-      <div className="timeline-section" id="incident-timeline">
-        <h3>Хронология</h3>
-        {[...incident.deploys, ...incident.metrics, ...incident.logs]
-          .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
-          .map((event) => (
-            <div
-              key={event.id}
-              id={"version" in event ? `deploy-${event.id}` : "name" in event ? `metric-${event.id}` : `log-${event.id}`}
-              className="timeline-event"
-            >
-              <Clock3 size={14} aria-hidden="true" />
-              <span>{formatClock(event.timestamp)}</span>
-              <strong>{"version" in event ? "Развертывание" : "name" in event ? "Метрика" : "Лог"}</strong>
-              <p>{"version" in event ? `${event.version} · ${event.branch}` : "name" in event ? `${event.name}: ${event.value} ${event.unit}` : event.message}</p>
-            </div>
-          ))}
-      </div>
+      <IncidentTimeline incident={incident} />
 
       <div className="timeline-grid">
-        <article id="incident-метрики">
-          <h3>Метрики</h3>
-          {incident.metrics.map((metric) => (
-            <div key={metric.id} id={`metric-row-${metric.id}`} className="timeline-row metric-row">
-              <Clock3 size={14} aria-hidden="true" />
-              <span>{formatClock(metric.timestamp)}</span>
-              <strong>{metric.name}</strong>
-              <em>{metric.value} {metric.unit}</em>
-            </div>
-          ))}
-        </article>
-        <article id="incident-логи">
-          <h3>Логи</h3>
-          <div className="log-list">
-            {visibleLogs.map((log) => (
-              <pre key={log.id} id={`log-row-${log.id}`}><code>[{formatClock(log.timestamp)}] {log.level.toUpperCase()} {log.message}</code></pre>
-            ))}
-            {!visibleLogs.length ? <p className="muted-copy">По текущим фильтрам логи не найдены.</p> : null}
-          </div>
-        </article>
+        <MetricsPreview metrics={incident.metrics} />
+        <LogsPreview logs={visibleLogs} />
       </div>
 
-      <div className="evidence-section" id="incident-подтверждающие-данные">
+      <div className="evidence-section" id="incident-evidence">
         <div className="section-heading compact">
           <h3>Подтверждающие данные</h3>
           <p>Метрики, логи и контекст развертывания, которые поддерживают гипотезу.</p>
@@ -567,20 +848,14 @@ export function IncidentDetailSections({
         </div>
       </div>
 
-      <div className="role-guidance" id="incident-действия">
-        <div>
-          <span className="eyebrow">{copy.title}</span>
-          <p>{copy.hint}</p>
-        </div>
-        <ul>
-          {(analysis?.nextStep ? [analysis.nextStep, ...copy.actions] : copy.actions).slice(0, 4).map((action) => (
-            <li key={action}>
-              <CheckCircle2 size={15} aria-hidden="true" />
-              {action}
-            </li>
-          ))}
-        </ul>
-      </div>
+      <EscalationSection
+        events={incident.events}
+        summary={incident.handoffSummary ?? escalationSummary}
+        copyBusy={handoffCopyMutation.isPending}
+        onCopyHandoff={() => handoffCopyMutation.mutateAsync()}
+      />
+
+      <RoleGuidanceCard role={role} nextStep={analysis?.nextStep} />
     </section>
   );
 
@@ -588,7 +863,7 @@ export function IncidentDetailSections({
     return (
       <div className="incident-workspace-grid">
         {detail}
-        <IncidentCopilotPanel incident={incident} />
+        <IncidentAssistantPanel incident={incident} role={role} compact />
       </div>
     );
   }

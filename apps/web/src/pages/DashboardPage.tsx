@@ -1,10 +1,10 @@
-import type { IncidentStatus, ScenarioSummary } from "@triage-ai/shared";
+import type { IncidentListItem, IncidentStatus, ScenarioSummary } from "@triage-ai/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, AlertTriangle, ArrowRight, Info, Play, RefreshCcw, ShieldAlert, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { EmptyState } from "@/components/EmptyState";
-import { StatusPill } from "@/components/StatusPill";
+import { ConfidenceBadge, SeverityBadge, StatusBadge, StatusPill } from "@/components/StatusPill";
 import { AnimatedGlowingSearchBar } from "@/components/ui/animated-glowing-search-bar";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,7 +16,7 @@ import {
 } from "@/features/incidents/components";
 import { buildTrendPoint, guideSteps, roleCopy, useIncidentWorkspace } from "@/features/incidents/incident-workspace";
 import { api } from "@/lib/api";
-import { confidenceLabel, formatClock, severityLabel, statusLabel } from "@/lib/labels";
+import { formatClock } from "@/lib/labels";
 import { pilotMetrics } from "@/lib/pilot-metrics";
 
 function delay(ms: number) {
@@ -38,7 +38,16 @@ function ScenarioCard({
 }) {
   return (
     <article className={`scenario-card ${active ? "active" : ""}`}>
-      <button className="scenario-card__body" type="button" onClick={onSelect} aria-label={`Выбрать сценарий ${scenario.name}`}>
+      <button
+        className="scenario-card__body"
+        type="button"
+        disabled={running}
+        onClick={() => {
+          onSelect();
+          onRun();
+        }}
+        aria-label={`Запустить и открыть инцидент: ${scenario.name}`}
+      >
         <span className="scenario-card__kicker">{scenario.incidentType}</span>
         <strong>{scenario.name}</strong>
         <p>{scenario.description}</p>
@@ -63,6 +72,7 @@ function ScenarioCard({
 
 export function DashboardPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const workspace = useIncidentWorkspace();
   const [search, setSearch] = useState("");
   const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null);
@@ -115,11 +125,17 @@ export function DashboardPage() {
     },
     onSuccess: (response) => {
       queryClient.setQueryData(["incident", response.incident.id], response.incident);
+      queryClient.setQueryData<IncidentListItem[]>(["incidents"], (current = []) => [
+        { ...response.incident },
+        ...current.filter((incident) => incident.id !== response.incident.id)
+      ]);
       void queryClient.invalidateQueries({ queryKey: ["incidents"] });
       workspace.setSelectedIncidentId(response.incident.id);
+      workspace.setRole("on-call");
       const nextIncidents = [response.incident, ...incidents.filter((incident) => incident.id !== response.incident.id)];
       workspace.appendTrend(nextIncidents);
       setStatusMessage("Демонстрационный сценарий выполнен: инцидент создан и проанализирован");
+      navigate(`/incidents/${response.incident.id}`);
     },
     onError: () => setStatusMessage("Не удалось запустить сценарий. Проверьте API."),
     onSettled: () => setRunningScenarioId(null)
@@ -139,17 +155,36 @@ export function DashboardPage() {
   });
 
   const statusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: IncidentStatus }) => api.updateIncidentStatus(id, status),
+    mutationFn: async ({ id, status }: { id: string; status: IncidentStatus }) => {
+      if (status === "escalated") {
+        const response = await api.createEscalation(id);
+        return response.incident;
+      }
+      return api.updateIncidentStatus(id, status);
+    },
     onSuccess: (incident) => {
       queryClient.setQueryData(["incident", incident.id], incident);
+      queryClient.setQueryData<IncidentListItem[]>(["incidents"], (current) => {
+        const source = current?.length ? current : incidents;
+        const nextItem: IncidentListItem = { ...incident };
+        return source.some((item) => item.id === incident.id)
+          ? source.map((item) => item.id === incident.id ? { ...item, ...nextItem } : item)
+          : [nextItem, ...source];
+      });
       void queryClient.invalidateQueries({ queryKey: ["incidents"] });
       workspace.appendTrend(incidents.map((item) => item.id === incident.id ? incident : item));
+      if (incident.status === "escalated") {
+        workspace.setRole("escalation");
+        workspace.setSelectedIncidentId(incident.id);
+        setStatusMessage("Инцидент отправлен на эскалацию");
+        return;
+      }
       setStatusMessage(`Инцидент: ${actionLabel(incident.status)}`);
     }
   });
 
   const metrics = useMemo(() => ({
-    criticalActive: incidents.filter((incident) => incident.severity === "critical" && incident.status !== "resolved").length,
+    criticalActive: incidents.filter((incident) => incident.severity === "critical" && incident.status !== "closed").length,
     analyzed: incidents.filter((incident) => Boolean(incident.confidence)).length,
     lowConfidence: incidents.filter((incident) => incident.confidence === "low").length
   }), [incidents]);
@@ -185,9 +220,14 @@ export function DashboardPage() {
           onSubmit={submitSearch}
           placeholder="Искать инцидент или сервис..."
         />
-        <div className="role-switch-inline" aria-label="Переключить роль">
-          <button type="button" className={workspace.role === "on-call" ? "active" : ""} onClick={() => workspace.setRole("on-call")}>Дежурный инженер</button>
-          <button type="button" className={workspace.role === "escalation" ? "active" : ""} onClick={() => workspace.setRole("escalation")}>Эскалация</button>
+        <div className="role-mode-control" aria-label="Режим работы">
+          <div className="role-switch-inline">
+            <button type="button" className={workspace.role === "on-call" ? "active" : ""} onClick={() => workspace.setRole("on-call")}>Дежурный инженер</button>
+            <button type="button" className={workspace.role === "escalation" ? "active" : ""} onClick={() => workspace.setRole("escalation")}>Эскалация</button>
+          </div>
+          <p>{workspace.role === "on-call"
+            ? "Фокус на impact и ближайшем безопасном действии."
+            : "Фокус на evidence и передаче контекста команде."}</p>
         </div>
         <Button type="button" variant="outline" disabled={resetMutation.isPending} onClick={() => resetMutation.mutate()}>
           <RefreshCcw size={16} className={resetMutation.isPending ? "spin" : ""} aria-hidden="true" />
@@ -206,7 +246,7 @@ export function DashboardPage() {
         <div className="panel-heading compact">
           <div>
             <h2>Как пользоваться Triage AI</h2>
-            <p>Тестовый режим использует синтетические данные: это демонстрация полного цикла разбора без production secrets.</p>
+            <p>Синтетические данные позволяют безопасно проверить полный цикл разбора без production secrets.</p>
           </div>
           <Button type="button" variant="ghost" onClick={() => workspace.setGuideOpen(!workspace.guideOpen)}>
             {workspace.guideOpen ? "Скрыть инструкцию" : "Показать инструкцию"}
@@ -280,9 +320,9 @@ export function DashboardPage() {
                   <p>{selectedIncident.serviceName} · {formatClock(selectedIncident.detectedAt)}</p>
                 </div>
                 <div className="incident-row__badges">
-                  <StatusPill tone={selectedIncident.severity}>{severityLabel(selectedIncident.severity)}</StatusPill>
-                  <StatusPill tone={selectedIncident.status}>{statusLabel(selectedIncident.status)}</StatusPill>
-                  {selectedIncident.confidence ? <StatusPill tone={selectedIncident.confidence}>{confidenceLabel(selectedIncident.confidence)}</StatusPill> : null}
+                  <SeverityBadge severity={selectedIncident.severity} />
+                  <StatusBadge status={selectedIncident.status} />
+                  {selectedIncident.confidence ? <ConfidenceBadge confidence={selectedIncident.confidence} /> : null}
                 </div>
                 <IncidentActions incident={selectedIncident} disabled={statusMutation.isPending} onStatus={onStatus} />
                 <Button asChild>
@@ -337,10 +377,13 @@ export function DashboardPage() {
                     <small>{incident.serviceName} · {formatClock(incident.detectedAt)}</small>
                   </span>
                   <span className="incident-row__badges">
-                    <StatusPill tone={incident.severity}>{severityLabel(incident.severity)}</StatusPill>
-                    <StatusPill tone={incident.status}>{statusLabel(incident.status)}</StatusPill>
+                    <SeverityBadge severity={incident.severity} />
+                    <StatusBadge status={incident.status} />
                   </span>
                 </button>
+                <Button asChild variant="outline" size="sm">
+                  <Link to={`/incidents/${incident.id}`}>Открыть</Link>
+                </Button>
               </article>
             ))}
             {!filteredIncidents.length ? (

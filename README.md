@@ -11,7 +11,13 @@ MVP работает в тестовом режиме: реальные secrets 
 - Prisma с PostgreSQL для Docker/production-подобного режима.
 - Memory repository для локального запуска без БД.
 - Recharts для графика динамики инцидентов.
-- Vanilla CSS с mint/green CSS variables, light/dark theme через `.dark`.
+- Vanilla CSS с Cloud-like design tokens, mint/green accent и light/dark theme через `.dark`.
+
+## Дизайн
+
+Финальный UI следует Cloud-like console принципам: крупный публичный вход в продукт, сервисные карточки,
+компактный app shell, рабочая область инцидента и аккуратные enterprise-панели. Triage AI не использует
+чужой бренд или ассеты; подробный brief описан в [`docs/design-redesign-brief.md`](docs/design-redesign-brief.md).
 
 ## Быстрый запуск
 
@@ -76,13 +82,13 @@ npm run dev
 - Email-оповещения.
 - Провайдер анализа ИИ.
 
-Включённые интеграции работают в тестовом режиме. Отключённые показывают, какие endpoint, credentials, Webhook/API Token и secrets management потребуются для production.
+Включённые интеграции работают в тестовом режиме. Отключённые показывают, какие endpoint, credentials, Webhook/API Token и secrets manager потребуются для production.
 
 ### Провайдеры ИИ
 
 В MVP включён тестовый provider на rules-based анализе. YandexGPT, GigaChat, OpenAI и Custom endpoint показаны как production-ready границы подключения и требуют backend env или secrets manager. Frontend не принимает и не хранит API-ключи.
 
-## Сценарий демонстрации MVP на защите
+## Сценарий демонстрации продукта
 
 1. Открыть landing page и показать ценность Triage AI.
 2. Войти через `demo@triage.ai` / `demo1234`.
@@ -121,14 +127,14 @@ docker compose up --build
 - Авторизация тестовая и не заменяет production auth.
 - Данные синтетические.
 - ИИ-анализ rules-based, без внешних LLM keys.
-- Secrets management не реализован внутри приложения.
+- Secrets manager не реализован внутри приложения.
 - RBAC, audit log, SSO, real adapters и observability требуют отдельного production этапа.
 
 ## Production follow-ups
 
 - Подключить реальные Prometheus/ELK источники.
 - Добавить backend auth, RBAC и SSO.
-- Настроить secrets management на инфраструктуре заказчика.
+- Настроить secrets manager на инфраструктуре заказчика.
 - Добавить audit log действий.
 - Подключить production AI provider с политиками обработки данных.
 - Добавить deployment pipeline и runtime monitoring.

@@ -29,9 +29,9 @@ export function confidenceLabel(confidence?: Confidence) {
 }
 
 export function statusLabel(status: IncidentStatus) {
-  if (status === "active") return "Активен";
-  if (status === "acknowledged") return "В работе";
-  if (status === "escalated") return "Эскалирован";
+  if (status === "new") return "Новый";
+  if (status === "in_progress") return "В работе";
+  if (status === "escalated") return "На эскалации";
   return "Закрыт";
 }
 

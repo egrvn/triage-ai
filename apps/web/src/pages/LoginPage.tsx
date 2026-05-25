@@ -73,7 +73,7 @@ export function LoginPage() {
           <strong>Тестовый доступ</strong>
           <span>Email: {TEST_EMAIL}</span>
           <span>Пароль: {TEST_PASSWORD}</span>
-          <small>Это прозрачный тестовый вход для MVP. Production security здесь не имитируется.</small>
+          <small>Это прозрачный тестовый вход. Production security подключается на backend auth/RBAC слое.</small>
         </div>
 
         <Button asChild variant="ghost">

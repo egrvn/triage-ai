@@ -72,7 +72,7 @@ const sections: DocsSection[] = [
     keywords: ["обзор", "triage", "incident response", "сводка", "гипотеза"],
     body: (
       <p>
-        Triage AI — это MVP-консоль для incident response. Она помогает дежурному инженеру и команде
+        Triage AI — это консоль для incident response. Она помогает дежурному инженеру и команде
         эскалации быстрее собрать контекст, получить автоматическую сводку, сформировать гипотезу причины
         и проверить подтверждающие данные.
       </p>
@@ -102,7 +102,7 @@ const sections: DocsSection[] = [
     body: (
       <div className="docs-flow">
         {[
-          ["Сигналы", "Prometheus/ELK и тестовые adapters отдают метрики, логи и оповещения."],
+          ["Сигналы", "Prometheus/ELK и синтетические adapters отдают метрики, логи и оповещения."],
           ["Нормализация", "Система приводит события к единому формату и связывает их с сервисом."],
           ["Сопоставление", "Метрики, логи и контекст развертывания связываются по timeline."],
           ["Анализ ИИ", "Провайдер формирует сводку, гипотезу причины и уровень уверенности."],
@@ -274,7 +274,7 @@ const sections: DocsSection[] = [
         <div><dt>Активные критичные</dt><dd>Количество critical incidents, которые ещё не закрыты.</dd></div>
         <div><dt>Проанализировано ИИ</dt><dd>Количество инцидентов, где сформированы сводка и гипотеза причины.</dd></div>
         <div><dt>Низкая уверенность</dt><dd>Случаи, где сигнал неполный и гипотеза требует ручной проверки.</dd></div>
-        <div><dt>В работе / Закрыт / Эскалирован</dt><dd>Состояния жизненного цикла инцидента в MVP.</dd></div>
+        <div><dt>В работе / На эскалации / Закрыт</dt><dd>Состояния жизненного цикла инцидента в продуктовой консоли.</dd></div>
       </dl>
     )
   },
@@ -309,9 +309,9 @@ const sections: DocsSection[] = [
   },
   {
     id: "demo-script",
-    title: "Сценарий демонстрации MVP на защите",
+    title: "Сценарий демонстрации продукта",
     icon: PlaySquare,
-    keywords: ["демонстрация", "защита", "script", "workspace", "copilot"],
+    keywords: ["демонстрация", "script", "workspace", "copilot"],
     body: (
       <ol>
         <li>Открыть landing и показать позиционирование Triage AI.</li>
@@ -335,12 +335,12 @@ const sections: DocsSection[] = [
     body: (
       <Accordion type="single" collapsible className="faq-list faq-list--accordion">
         {[
-          ["Почему данные тестовые?", "MVP должен запускаться без реальных secrets и customer data, поэтому использует синтетические сигналы."],
-          ["Можно ли подключить реальные Prometheus/ELK?", "Да, через production adapters, endpoint allowlist и secrets management."],
+          ["Почему данные тестовые?", "Синтетические сигналы позволяют безопасно проверить полный flow без реальных secrets и customer data."],
+          ["Можно ли подключить реальные Prometheus/ELK?", "Да, через production adapters, endpoint allowlist и secrets manager."],
           ["Что означает низкая уверенность?", "Система не уверена в гипотезе причины, потому что сигнал неполный или подтверждающие данные слабые."],
           ["Заменяет ли ИИ инженера?", "Нет. ИИ ускоряет сбор контекста, но решение остаётся за дежурным инженером или эскалацией."],
-          ["Где хранятся secrets?", "В MVP реальные secrets не хранятся. Для production нужен внешний secrets management."],
-          ["Что нужно для production версии?", "Подключить real data sources, auth, RBAC, observability, audit log и deployment pipeline."]
+          ["Где хранятся secrets?", "Реальные secrets должны храниться во внешнем secrets manager, а frontend получает только статусы настройки."],
+          ["Что нужно для production версии?", "Подключить реальные источники данных, auth, RBAC, observability, audit log и deployment pipeline."]
         ].map(([question, answer], index) => (
           <AccordionItem key={question} value={`faq-${index}`}>
             <AccordionTrigger>{question}</AccordionTrigger>
@@ -393,7 +393,7 @@ export function DocsContent({ appShell = false }: { appShell?: boolean }) {
       </section>
 
       <div className="docs-callout wide">
-        MVP использует тестовые adapters. Для production потребуется подключение real data sources и secrets management.
+        Тестовый режим использует синтетические adapters. Production-подключения настраиваются через реальные источники данных и secrets manager.
       </div>
 
       <div className="docs-layout">
