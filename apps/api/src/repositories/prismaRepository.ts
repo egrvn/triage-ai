@@ -5,6 +5,7 @@ import type {
   DemoResetResponse,
   EscalationEvent,
   EscalationResponse,
+  GenericIngest,
   IncidentAnalysis,
   IncidentChatMessage,
   IncidentDetail,
@@ -221,6 +222,79 @@ export class PrismaIncidentRepository implements IncidentRepository {
     return this.decorateDetail(detail);
   }
 
+  async ingestCustom(input: GenericIngest): Promise<IncidentDetail> {
+    const serviceName = input.serviceName ?? input.service ?? "unknown-service";
+    const timestamp = input.timestamp ? new Date(input.timestamp) : new Date();
+    const incidentId = `inc-${input.source || "custom"}-${nowId()}`;
+    const logs = input.logSnippet
+      ? [{
+          id: `${incidentId}-log-custom`,
+          timestamp,
+          serviceName,
+          level: input.severity === "critical" ? "error" : "warn",
+          message: input.logSnippet,
+          source: input.source
+        }]
+      : [{
+          id: `${incidentId}-log-message`,
+          timestamp,
+          serviceName,
+          level: input.severity === "critical" ? "error" : "info",
+          message: input.description ?? input.message,
+          source: input.source
+        }];
+
+    await this.prisma.incident.create({
+      data: {
+        id: incidentId,
+        title: input.title ?? input.message.slice(0, 120),
+        serviceName,
+        severity: input.severity,
+        status: "new",
+        startedAt: timestamp,
+        detectedAt: timestamp,
+        summary: input.description ?? input.message,
+        metrics: input.metricSnippet ? {
+          create: [{
+            id: `${incidentId}-metric-custom`,
+            timestamp,
+            serviceName,
+            name: "custom_signal_value",
+            value: 1,
+            unit: "signal",
+            labels: { source: input.source, raw: input.metricSnippet.slice(0, 120), ...input.labels }
+          }]
+        } : undefined,
+        logs: { create: logs },
+        deploys: input.deployEvent ? {
+          create: [{
+            id: `${incidentId}-deploy-custom`,
+            timestamp,
+            serviceName,
+            version: input.labels.version ?? "custom-event",
+            branch: input.labels.branch ?? "custom-context",
+            commitSha: input.labels.commitSha ?? "unknown",
+            author: input.labels.author ?? input.source,
+            summary: input.deployEvent
+          }]
+        } : undefined
+      }
+    });
+
+    this.addEvent(incidentId, {
+      type: "created",
+      actor: input.source === "manual" ? "Дежурный инженер" : "Generic ingest",
+      text: input.source === "manual"
+        ? "Инцидент создан вручную через AI-ассистент."
+        : "Инцидент создан через Generic ingest endpoint."
+    });
+    const incident = await this.getIncident(incidentId);
+    if (!incident) {
+      throw new Error(`Incident ${incidentId} was not created`);
+    }
+    return this.decorateDetail(incident);
+  }
+
   async listIncidents(): Promise<IncidentListItem[]> {
     const incidents = await this.prisma.incident.findMany({ orderBy: { detectedAt: "desc" } });
     return incidents.map((incident) => ({
@@ -391,6 +465,21 @@ export class PrismaIncidentRepository implements IncidentRepository {
         correctedRootCause: feedback.correctedRootCause
       }
     });
+
+    if (feedback.hypothesisVerdict === "partially_correct") {
+      this.addEvent(incidentId, {
+        type: "feedback_recorded",
+        actor: "Дежурный инженер",
+        text: "Отмечено: нужно больше данных для подтверждения гипотезы."
+      });
+    }
+    if (feedback.hypothesisVerdict === "incorrect") {
+      this.addEvent(incidentId, {
+        type: "feedback_recorded",
+        actor: "Дежурный инженер",
+        text: "Feedback сохранён: гипотеза отмечена как неверная."
+      });
+    }
 
     return {
       id: created.id,

@@ -4,6 +4,7 @@ import type {
   DemoResetResponse,
   EscalationEvent,
   EscalationResponse,
+  GenericIngest,
   IncidentEvent,
   IncidentAnalysis,
   IncidentChatMessage,
@@ -40,4 +41,5 @@ export interface IncidentRepository {
     timestamp: string;
     labels: Record<string, string>;
   }): Promise<IncidentDetail>;
+  ingestCustom(input: GenericIngest): Promise<IncidentDetail>;
 }

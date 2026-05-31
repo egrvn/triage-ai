@@ -1,6 +1,7 @@
 import {
   Activity,
   Bot,
+  BookOpenCheck,
   CheckCircle2,
   DatabaseZap,
   GitBranch,
@@ -15,10 +16,22 @@ import { Button } from "@/components/ui/button";
 
 const roadmapSections = [
   {
+    title: "Proactive prevention",
+    status: "Следующий шаг",
+    icon: LineChart,
+    items: ["Early warning signals", "Anomaly context", "Change-risk signals", "Prevention recommendations", "Связь с SLO и release risk"]
+  },
+  {
     title: "Реальные источники данных",
     status: "Следующий шаг",
     icon: DatabaseZap,
-    items: ["Адаптер Prometheus", "Логи ELK/OpenSearch", "События deploy", "Прием через Webhook/API", "Валидация payload"]
+    items: ["Generic ingest endpoint", "Адаптер Prometheus", "Zabbix", "Victoria Metrics", "OpenSearch", "Custom webhook/API", "Валидация payload"]
+  },
+  {
+    title: "Knowledge base / Custom context",
+    status: "Следующий шаг",
+    icon: BookOpenCheck,
+    items: ["Runbooks", "История инцидентов", "Service ownership", "Deployment notes", "Access control для контекста"]
   },
   {
     title: "LLM providers",
@@ -30,7 +43,7 @@ const roadmapSections = [
     title: "Безопасность и доступы",
     status: "Production",
     icon: KeyRound,
-    items: ["Production-аутентификация", "RBAC", "SSO", "Audit log", "Secrets manager", "Маскирование данных"]
+    items: ["Production-аутентификация", "RBAC", "SSO", "Audit log", "Secrets manager", "PII masking", "Local mode"]
   },
   {
     title: "Процесс инцидента",

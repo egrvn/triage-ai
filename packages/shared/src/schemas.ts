@@ -97,7 +97,7 @@ export const IncidentListItemSchema = z.object({
 
 export const IncidentEventSchema = z.object({
   id: z.string(),
-  type: z.enum(["created", "accepted", "escalated", "closed", "returned_to_work", "handoff_copied"]),
+  type: z.enum(["created", "accepted", "escalated", "closed", "returned_to_work", "handoff_copied", "feedback_recorded"]),
   at: z.string().datetime(),
   actor: z.string(),
   text: z.string()
@@ -220,6 +220,35 @@ export const AlertIngestSchema = z.object({
   labels: z.record(z.string()).default({})
 });
 
+export const GenericIngestSchema = z.object({
+  source: z.string().min(1).max(80).default("custom"),
+  serviceName: z.string().min(1).max(120).optional(),
+  service: z.string().min(1).max(120).optional(),
+  title: z.string().min(1).max(180).optional(),
+  message: z.string().min(1).max(1200),
+  severity: SeveritySchema.default("warning"),
+  timestamp: z.string().datetime().optional(),
+  labels: z.record(z.string()).default({}),
+  description: z.string().max(2000).optional(),
+  logSnippet: z.string().max(4000).optional(),
+  metricSnippet: z.string().max(2000).optional(),
+  deployEvent: z.string().max(2000).optional()
+}).superRefine((value, context) => {
+  if (!value.serviceName && !value.service) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["serviceName"],
+      message: "serviceName or service is required"
+    });
+  }
+});
+
+export const GenericIngestResponseSchema = z.object({
+  incident: IncidentDetailSchema,
+  created: z.boolean(),
+  normalizedServiceName: z.string()
+});
+
 export const MetricsIngestSchema = z.object({
   points: z.array(MetricPointSchema.omit({ id: true }))
 });
@@ -259,3 +288,6 @@ export type UpdateIntegrationSetting = z.infer<typeof UpdateIntegrationSettingSc
 export type UpdateIncidentStatus = z.infer<typeof UpdateIncidentStatusSchema>;
 export type DemoResetResponse = z.infer<typeof DemoResetResponseSchema>;
 export type TestIntegrationResponse = z.infer<typeof TestIntegrationResponseSchema>;
+export type AlertIngest = z.infer<typeof AlertIngestSchema>;
+export type GenericIngest = z.infer<typeof GenericIngestSchema>;
+export type GenericIngestResponse = z.infer<typeof GenericIngestResponseSchema>;

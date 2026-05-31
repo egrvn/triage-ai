@@ -211,55 +211,54 @@ export function IncidentTrendChart({
   data: IncidentTrendPoint[];
   compact?: boolean;
 }) {
+  const chartData = data.length
+    ? data
+    : [{ time: "baseline", critical: 0, warning: 0, lowConfidence: 0, analyzed: 0 }];
+
   return (
     <section className={`ops-panel incident-chart-panel ${compact ? "compact" : ""}`}>
       <div className="panel-heading">
         <div>
           <h2>Динамика инцидентов</h2>
-          <p>{compact ? "Краткая динамика после запусков сценариев." : "График обновляется после запуска сценариев и сбрасывается при обновлении данных."}</p>
+          <p>{data.length
+            ? (compact ? "Краткая динамика после запусков сценариев." : "График обновляется после запуска сценариев и сбрасывается при обновлении данных.")
+            : "Baseline для демо-режима: динамика начнёт расти после запуска сценария."}</p>
         </div>
       </div>
-      {data.length ? (
-        <div className="incident-chart" aria-label="Динамика инцидентов">
-          <ResponsiveContainer width="100%" height={compact ? 190 : 360}>
-            <AreaChart data={data} margin={{ top: 12, right: 18, bottom: compact ? 0 : 34, left: -16 }}>
-              <defs>
-                <linearGradient id={`criticalGradient-${compact ? "mini" : "full"}`} x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="5%" stopColor="var(--chart-4)" stopOpacity={0.34} />
-                  <stop offset="95%" stopColor="var(--chart-4)" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id={`analyzedGradient-${compact ? "mini" : "full"}`} x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="5%" stopColor="var(--chart-1)" stopOpacity={0.42} />
-                  <stop offset="95%" stopColor="var(--chart-1)" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="time" tickLine={false} axisLine={false} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} />
-              <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} />
-              <Tooltip
-                contentStyle={{
-                  background: "var(--popover)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--radius)",
-                  color: "var(--popover-foreground)"
-                }}
-                labelFormatter={(label) => `Время: ${label}`}
-                formatter={(value, name) => [value, name]}
-              />
-              {!compact ? <Legend formatter={(value) => value} /> : null}
-              <Area type="monotone" dataKey="critical" name="Критичные" stroke="var(--chart-4)" fill={`url(#criticalGradient-${compact ? "mini" : "full"})`} strokeWidth={2} />
-              <Area type="monotone" dataKey="warning" name="Средние" stroke="var(--chart-2)" fill="transparent" strokeWidth={2} />
-              <Area type="monotone" dataKey="lowConfidence" name="Низкая уверенность" stroke="var(--chart-3)" fill="transparent" strokeWidth={2} />
-              <Area type="monotone" dataKey="analyzed" name="Проанализировано ИИ" stroke="var(--chart-1)" fill={`url(#analyzedGradient-${compact ? "mini" : "full"})`} strokeWidth={2} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      ) : (
-        <EmptyState
-          title="Динамика пока не построена"
-          description="Запустите демонстрационный сценарий, чтобы увидеть динамику инцидентов."
-        />
-      )}
+      <div className="incident-chart" aria-label="Динамика инцидентов">
+        <ResponsiveContainer width="100%" height={compact ? 190 : 360}>
+          <AreaChart data={chartData} margin={{ top: 12, right: 18, bottom: compact ? 0 : 34, left: -16 }}>
+            <defs>
+              <linearGradient id={`criticalGradient-${compact ? "mini" : "full"}`} x1="0" x2="0" y1="0" y2="1">
+                <stop offset="5%" stopColor="var(--chart-4)" stopOpacity={0.34} />
+                <stop offset="95%" stopColor="var(--chart-4)" stopOpacity={0} />
+              </linearGradient>
+              <linearGradient id={`analyzedGradient-${compact ? "mini" : "full"}`} x1="0" x2="0" y1="0" y2="1">
+                <stop offset="5%" stopColor="var(--chart-1)" stopOpacity={0.42} />
+                <stop offset="95%" stopColor="var(--chart-1)" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
+            <XAxis dataKey="time" tickLine={false} axisLine={false} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} />
+            <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} />
+            <Tooltip
+              contentStyle={{
+                background: "var(--popover)",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius)",
+                color: "var(--popover-foreground)"
+              }}
+              labelFormatter={(label) => `Время: ${label}`}
+              formatter={(value, name) => [value, name]}
+            />
+            {!compact ? <Legend formatter={(value) => value} /> : null}
+            <Area type="monotone" dataKey="critical" name="Критичные" stroke="var(--chart-4)" fill={`url(#criticalGradient-${compact ? "mini" : "full"})`} strokeWidth={2} />
+            <Area type="monotone" dataKey="warning" name="Средние" stroke="var(--chart-2)" fill="transparent" strokeWidth={2} />
+            <Area type="monotone" dataKey="lowConfidence" name="Низкая уверенность" stroke="var(--chart-3)" fill="transparent" strokeWidth={2} />
+            <Area type="monotone" dataKey="analyzed" name="Проанализировано ИИ" stroke="var(--chart-1)" fill={`url(#analyzedGradient-${compact ? "mini" : "full"})`} strokeWidth={2} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
     </section>
   );
 }
@@ -425,6 +424,12 @@ function IncidentTimeline({
       title: "Handoff summary скопирован",
       source: "clipboard",
       tone: "escalation"
+    },
+    feedback_recorded: {
+      type: "Feedback",
+      title: "Feedback по гипотезе сохранён",
+      source: "engineer",
+      tone: "ai"
     }
   };
   const events = [
@@ -613,6 +618,7 @@ export function IncidentDetailSections({
   role,
   onStatus,
   onFeedbackWrong,
+  onFeedbackPartial,
   logs,
   statusBusy,
   workspaceMode = false
@@ -621,11 +627,12 @@ export function IncidentDetailSections({
   role: RoleMode;
   onStatus: (id: string, status: IncidentStatus) => void;
   onFeedbackWrong?: (id: string) => void;
+  onFeedbackPartial?: (id: string) => void;
   logs?: LogEvent[];
   statusBusy?: boolean;
   workspaceMode?: boolean;
 }) {
-  const [explainOpen, setExplainOpen] = useState(false);
+  const [explainOpen, setExplainOpen] = useState(true);
   const [copyStatus, setCopyStatus] = useState("");
   const queryClient = useQueryClient();
   const handoffCopyMutation = useMutation({
@@ -656,6 +663,19 @@ export function IncidentDetailSections({
   const analysis = incident.analysis;
   const latestDeploy = incident.deploys[0];
   const visibleLogs = logs ?? incident.logs;
+  const explainabilityEvidence = analysis?.evidence?.length
+    ? analysis.evidence
+    : [
+      incident.metrics[0]
+        ? { id: `fallback-metric-${incident.metrics[0].id}`, kind: "metric" as const, refId: incident.metrics[0].id, title: "Доступная метрика" }
+        : null,
+      visibleLogs[0]
+        ? { id: `fallback-log-${visibleLogs[0].id}`, kind: "log" as const, refId: visibleLogs[0].id, title: "Доступный лог" }
+        : null,
+      latestDeploy
+        ? { id: `fallback-deploy-${latestDeploy.id}`, kind: "deploy" as const, refId: latestDeploy.id, title: "Deploy correlation" }
+        : null
+    ].filter((item): item is { id: string; kind: "metric" | "log" | "deploy"; refId: string; title: string } => Boolean(item));
   const tabs = [
     { label: "Сводка", href: "#incident-summary" },
     { label: "Хронология", href: "#incident-timeline" },
@@ -689,37 +709,57 @@ export function IncidentDetailSections({
         </div>
       </div>
 
-      <div className="incident-workspace-actions">
-        <IncidentActions incident={incident} disabled={statusBusy} onStatus={onStatus} />
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            onFeedbackWrong?.(incident.id);
-            setCopyStatus("Feedback сохранён: гипотеза отмечена как неверная");
-          }}
-        >
-          Гипотеза неверна
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={() => {
-            if (!navigator.clipboard) {
-              setCopyStatus("Clipboard недоступен: выделите сводку в деталях инцидента вручную");
-              return;
-            }
-            navigator.clipboard.writeText(escalationSummary)
-              .then(() => setCopyStatus("Summary скопирован для эскалации"))
-              .catch(() => setCopyStatus("Не удалось скопировать автоматически. Выделите сводку вручную."));
-          }}
-        >
-          <Copy size={14} aria-hidden="true" />
-          Скопировать сводку
-        </Button>
-      </div>
+      <section className="incident-workspace-actions" aria-label="Действия по инциденту">
+        <div className="incident-workspace-actions__group">
+          <p>Основные действия</p>
+          <IncidentActions incident={incident} disabled={statusBusy} onStatus={onStatus} />
+        </div>
+        <div className="incident-workspace-actions__group secondary">
+          <p>Гипотеза и передача контекста</p>
+          <div className="incident-actions">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                onFeedbackWrong?.(incident.id);
+                setCopyStatus("Feedback сохранён: гипотеза отмечена как неверная");
+              }}
+            >
+              Гипотеза неверна
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              title="Частично верна: требуется дополнительная проверка"
+              onClick={() => {
+                onFeedbackPartial?.(incident.id);
+                setCopyStatus("Отмечено: требуется дополнительная проверка");
+              }}
+            >
+              Нужно больше данных
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                if (!navigator.clipboard) {
+                  setCopyStatus("Clipboard недоступен: выделите сводку в деталях инцидента вручную");
+                  return;
+                }
+                navigator.clipboard.writeText(escalationSummary)
+                  .then(() => setCopyStatus("Summary скопирован для эскалации"))
+                  .catch(() => setCopyStatus("Не удалось скопировать автоматически. Выделите сводку вручную."));
+              }}
+            >
+              <Copy size={14} aria-hidden="true" />
+              Скопировать сводку
+            </Button>
+          </div>
+        </div>
+      </section>
       {copyStatus ? <div className="inline-status small" role="status">{copyStatus}</div> : null}
 
       <div className="incident-analysis-tabs" aria-label="Разделы анализа">
@@ -727,6 +767,35 @@ export function IncidentDetailSections({
           <a key={item.href} href={item.href}>{item.label}</a>
         ))}
       </div>
+
+      <section className={`deploy-correlation-callout ${latestDeploy ? "strong" : "neutral"}`} aria-label="Приоритет deploy correlation">
+        <GitBranch size={18} aria-hidden="true" />
+        <div>
+          <div className="deploy-correlation-callout__header">
+            <div>
+              <span className="eyebrow">Deploy correlation</span>
+              <h3>Связь с развертыванием</h3>
+            </div>
+            {latestDeploy ? <StatusPill tone="healthy">Сильный сигнал</StatusPill> : <StatusPill tone="mock">Сигнал не найден</StatusPill>}
+          </div>
+          {latestDeploy ? (
+            <>
+              <p>
+                Развертывание <code>{latestDeploy.branch}</code> произошло перед обнаружением симптомов.
+                Совпадение timeline, метрик и error logs делает deploy correlation ключевым evidence.
+              </p>
+              <dl>
+                <div><dt>branch</dt><dd><code>{latestDeploy.branch}</code></dd></div>
+                <div><dt>service</dt><dd><code>{latestDeploy.serviceName}</code></dd></div>
+                <div><dt>deploy time</dt><dd>{formatClock(latestDeploy.timestamp)}</dd></div>
+                <div><dt>evidence</dt><dd>метрики + логи + timeline</dd></div>
+              </dl>
+            </>
+          ) : (
+            <p>Свежего deploy event в контексте нет: гипотезу нужно подтверждать метриками, логами и ручной проверкой.</p>
+          )}
+        </div>
+      </section>
 
       <section className="ai-summary-panel" id="incident-summary" aria-labelledby="ai-summary-title">
         <div className="section-heading compact">
@@ -787,7 +856,7 @@ export function IncidentDetailSections({
       </section>
 
       <div className="explainability-panel">
-        <button type="button" onClick={() => setExplainOpen((open) => !open)} aria-expanded={explainOpen}>
+        <button type="button" onClick={() => setExplainOpen(true)} aria-expanded={explainOpen}>
           <Sparkles size={16} aria-hidden="true" />
           Объяснить гипотезу
         </button>
@@ -804,7 +873,7 @@ export function IncidentDetailSections({
             <div>
               <h3>Ссылки на evidence</h3>
               <div className="copilot-citations explainability-citations">
-                {(analysis?.evidence ?? []).slice(0, 5).map((item) => (
+                {explainabilityEvidence.slice(0, 5).map((item) => (
                   <button
                     key={item.id}
                     type="button"

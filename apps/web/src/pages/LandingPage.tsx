@@ -28,6 +28,7 @@ import { BGPattern } from "@/components/ui/bg-pattern";
 import { Button } from "@/components/ui/button";
 import { FallingPatternBackground } from "@/components/ui/falling-pattern-background";
 import { MatrixText } from "@/components/ui/matrix-text";
+import { pilotMetrics } from "@/lib/pilot-metrics";
 
 const serviceCards = [
   {
@@ -50,7 +51,7 @@ const serviceCards = [
   },
   {
     title: "Интеграции",
-    text: "Prometheus, ELK, каналы уведомлений и API без хранения ключей во frontend.",
+    text: "Prometheus, ELK, Generic ingest, каналы уведомлений и API без хранения ключей во frontend.",
     icon: PlugZap,
     href: "#integrations"
   },
@@ -58,6 +59,12 @@ const serviceCards = [
     title: "Провайдеры ИИ",
     text: "Тестовый provider по умолчанию и production-ready границы для YandexGPT, GigaChat и OpenAI.",
     icon: Cpu,
+    href: "#integrations"
+  },
+  {
+    title: "Generic ingest",
+    text: "Единая точка приема событий из Zabbix, Victoria Metrics, OpenSearch и custom webhook/API.",
+    icon: Workflow,
     href: "#integrations"
   },
   {
@@ -70,23 +77,23 @@ const serviceCards = [
 
 const problems = [
   {
-    title: "Слишком много оповещений",
-    text: "Сигналов больше, чем контекста: дежурному инженеру приходится вручную отделять важное от шума.",
+    title: "“Alert есть, но контекст приходится собирать руками”",
+    text: "Сигналов больше, чем понятных связей: дежурный инженер открывает monitoring, logs, deploy history и вручную сверяет timeline.",
     icon: BellRing
   },
   {
-    title: "Ручной разбор занимает минуты",
-    text: "Первые минуты уходят на проверку логов, метрик, timeline и последних изменений.",
+    title: "“Первые 30–60 минут уходят на гипотезу”",
+    text: "Triage AI сокращает этот путь до проверяемой гипотезы за 5–15 минут в пилотном сценарии.",
     icon: Clock3
   },
   {
-    title: "Контекст разбросан",
-    text: "Логи, метрики, оповещения и развертывания живут в разных инструментах и теряют связь.",
+    title: "“Нужен единый вход для нестандартных источников”",
+    text: "Generic ingest принимает custom payload из Zabbix, Victoria Metrics, OpenSearch или внутреннего webhook.",
     icon: Network
   },
   {
-    title: "Эскалация теряет детали",
-    text: "При передаче инцидента команда получает неполный контекст и повторяет анализ.",
+    title: "“При handoff теряются доказательства”",
+    text: "Handoff summary сохраняет evidence, confidence, timeline и понятный следующий шаг для другой команды.",
     icon: MessagesSquare
   }
 ];
@@ -101,28 +108,32 @@ const flow = [
 
 const scenarios = [
   {
-    title: "Регрессия после релиза: всплеск HTTP 5xx",
+    title: "Release regression",
+    text: "Всплеск HTTP 5xx после deploy и сильная deploy correlation.",
     service: "payment-svc",
     severity: "Критичный",
     severityTone: "critical",
     icon: GitBranch
   },
   {
-    title: "Рост задержки под нагрузкой",
+    title: "Latency under load",
+    text: "p95 latency, CPU pressure и очередь без явного релизного триггера.",
     service: "catalog-svc",
     severity: "Средний",
     severityTone: "warning",
     icon: Activity
   },
   {
-    title: "Тайм-аут внешнего API",
+    title: "External dependency timeout",
+    text: "Ошибка upstream API, circuit breaker и деградация checkout flow.",
     service: "checkout-svc",
     severity: "Критичный",
     severityTone: "critical",
     icon: Clock3
   },
   {
-    title: "Неполный сигнал и низкая уверенность",
+    title: "Low-confidence sparse signal",
+    text: "Мало логов и метрик, AI не выдумывает root cause.",
     service: "profile-svc",
     severity: "Низкая уверенность",
     severityTone: "low",
@@ -130,13 +141,14 @@ const scenarios = [
   }
 ];
 
-const integrations = ["Prometheus", "ELK", "Telegram", "Slack", "Email", "YandexGPT", "GigaChat", "OpenAI", "Mock provider"];
+const integrations = ["Generic ingest", "Prometheus", "ELK", "Zabbix", "Victoria Metrics", "OpenSearch", "Telegram", "Slack", "Email", "YandexGPT", "GigaChat", "OpenAI"];
 
 const faq = [
+  ["Чем Triage AI полезен рядом с Datadog, PagerDuty и Grafana?", "Он не заменяет observability stack. Triage AI собирает контекст из этих систем в incident workspace, объясняет гипотезу и сохраняет evidence для handoff."],
+  ["Зачем AI, если инженер всё равно принимает решение?", "AI сокращает время до первой проверяемой гипотезы, показывает confidence и citations. Решение о rollback, mitigation или закрытии остаётся за инженером."],
+  ["Что такое Generic ingest?", "Это единый endpoint для custom monitoring/logging источников: Zabbix, Victoria Metrics, OpenSearch, внутренний webhook или API."],
   ["Почему данные тестовые?", "Синтетические сигналы позволяют безопасно проверить полный цикл разбора без подключения реальных secrets."],
-  ["Заменяет ли ИИ инженера?", "Нет. Triage AI собирает контекст, объясняет гипотезу и предлагает следующий шаг, но решение остаётся за инженером."],
-  ["Можно ли подключить реальные Prometheus и ELK?", "Да. Для production нужны adapters, backend env или secrets manager, read-only доступы и data policy."],
-  ["Что происходит при низкой уверенности?", "Ассистент честно говорит, что сигналов недостаточно, не выдумывает root cause и предлагает ручные проверки."]
+  ["Что происходит при низкой уверенности?", "Ассистент честно говорит, что сигналов недостаточно, не выдумывает root cause и предлагает ручные проверки или эскалацию."]
 ];
 
 export function LandingPage() {
@@ -153,11 +165,17 @@ export function LandingPage() {
               <Activity size={16} aria-hidden="true" />
               AI-слой для incident response
             </div>
-            <h1>Разбор инцидентов <MatrixText text="без хаоса" /></h1>
+            <h1>5–15 минут до гипотезы <MatrixText text="без хаоса" /></h1>
             <p>
-              Triage AI собирает логи, метрики, оповещения и события развертываний в единую карточку
-              инцидента, формирует гипотезу причины и помогает дежурному инженеру выбрать следующий шаг.
+              Triage AI помогает дежурному инженеру перейти от alert к проверяемой гипотезе:
+              собирает метрики, логи, deploy events и Generic ingest payload в единую карточку,
+              показывает evidence, confidence и следующий безопасный шаг.
             </p>
+            <div className="hero-value-strip" aria-label="Пилотная ценность">
+              <span><strong>5–15 мин</strong> до гипотезы вместо 30–60</span>
+              <span><strong>1–2</strong> перехода вместо 5–8 инструментов</span>
+              <span><strong>AI</strong> помогает, но не действует автономно</span>
+            </div>
             <div className="hero-section__actions">
               <Button asChild size="lg">
                 <Link to="/login">
@@ -266,8 +284,8 @@ export function LandingPage() {
         <section className="marketing-section scenarios-section" id="scenarios">
           <div className="section-heading">
             <span className="section-kicker">Сценарии</span>
-            <h2>Сценарии для проверки incident flow</h2>
-            <p>Каждый сценарий создаёт инцидент, обновляет метрики и ведёт в `/incidents/:id` для разбора.</p>
+            <h2>Классы инцидентов для пилота</h2>
+            <p>Каждый класс создаёт инцидент, обновляет метрики и ведёт в рабочую область `/incidents/:id`.</p>
           </div>
           <div className="scenario-preview-grid cloud-scenario-grid">
             {scenarios.map((scenario) => {
@@ -276,7 +294,8 @@ export function LandingPage() {
                 <article key={scenario.title} className="scenario-preview">
                   <Icon size={24} aria-hidden="true" />
                   <strong>{scenario.title}</strong>
-                  <p>{scenario.service}</p>
+                  <p>{scenario.text}</p>
+                  <small>{scenario.service}</small>
                   <span className={`status-pill status-pill--${scenario.severityTone}`}>{scenario.severity}</span>
                 </article>
               );
@@ -309,11 +328,28 @@ export function LandingPage() {
           </div>
         </section>
 
+        <section className="marketing-section pilot-metrics-section" id="pilot-metrics">
+          <div className="section-heading">
+            <span className="section-kicker">Метрики пилота</span>
+            <h2>Что измеряем до production-внедрения</h2>
+            <p>Это гипотезы ценности пилота, а не уже доказанные production-результаты.</p>
+          </div>
+          <div className="pilot-metrics-grid">
+            {pilotMetrics.map((metric) => (
+              <article key={metric.label} className="surface-card">
+                <strong>{metric.label}</strong>
+                <span>{metric.value}</span>
+                <p>{metric.caption}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
         <section className="marketing-section integrations-preview-section" id="integrations">
           <div className="section-heading">
             <span className="section-kicker">Интеграции</span>
-            <h2>Источники сигналов и AI providers без ключей во frontend</h2>
-            <p>Production-подключения настраиваются через backend env или secrets manager. Для безопасной проверки включён тестовый контур.</p>
+            <h2>Generic ingest, источники сигналов и AI providers</h2>
+            <p>Custom payload из monitoring/logging систем принимается через backend API. Production-подключения настраиваются через backend env или secrets manager.</p>
           </div>
           <div className="integration-logo-grid">
             {integrations.map((name) => (

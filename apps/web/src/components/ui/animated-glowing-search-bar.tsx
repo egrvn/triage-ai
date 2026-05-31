@@ -1,4 +1,4 @@
-import { Filter, Search, X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { cn } from "@/lib/utils";
 
@@ -62,8 +62,8 @@ export function AnimatedGlowingSearchBar({
           <X size={15} />
         </button>
       ) : null}
-      <button className="glow-search__filter" type="submit" aria-label="Открыть фильтры">
-        <Filter size={16} />
+      <button className="glow-search__filter" type="submit" aria-label="Найти">
+        <Search size={16} />
       </button>
     </form>
   );

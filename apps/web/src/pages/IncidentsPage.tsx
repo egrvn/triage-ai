@@ -1,4 +1,4 @@
-import type { IncidentListItem, IncidentStatus } from "@triage-ai/shared";
+import type { FeedbackRequest, IncidentListItem, IncidentStatus } from "@triage-ai/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Info, ShieldAlert, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -22,12 +22,19 @@ import { buildTrendPoint, useIncidentWorkspace } from "@/features/incidents/inci
 import { api } from "@/lib/api";
 import { formatClock } from "@/lib/labels";
 
+const QUEUE_MODE_KEY = "triage-ai-incident-queue-mode";
+
 export function IncidentsPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { id: routeIncidentId } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const workspace = useIncidentWorkspace();
+  const [queueMode, setQueueMode] = useState<"on-call" | "escalation">(() => {
+    if (searchParams.get("mode") === "escalation") return "escalation";
+    if (searchParams.get("mode") === "on-call") return "on-call";
+    return window.localStorage.getItem(QUEUE_MODE_KEY) === "escalation" ? "escalation" : "on-call";
+  });
   const [filters, setFilters] = useState(() => createDefaultIncidentFilters());
   const [statusMessage, setStatusMessage] = useState("");
 
@@ -36,24 +43,37 @@ export function IncidentsPage() {
 
   useEffect(() => {
     const mode = searchParams.get("mode");
-    if (mode === "escalation" && workspace.role !== "escalation") {
+    if (mode === "escalation" && queueMode !== "escalation") {
       setFilters(createDefaultIncidentFilters());
-      workspace.setRole("escalation");
+      setQueueMode("escalation");
     }
-    if (mode === "on-call" && workspace.role !== "on-call") {
+    if (mode === "on-call" && queueMode !== "on-call") {
       setFilters(createDefaultIncidentFilters());
-      workspace.setRole("on-call");
+      setQueueMode("on-call");
     }
-  }, [searchParams, workspace]);
+  }, [queueMode, searchParams]);
+
+  useEffect(() => {
+    window.localStorage.setItem(QUEUE_MODE_KEY, queueMode);
+  }, [queueMode]);
+
+  useEffect(() => {
+    if (routeIncidentId) return;
+
+    const desiredMode = queueMode === "escalation" ? "escalation" : "on-call";
+    if (searchParams.get("mode") !== desiredMode) {
+      navigate(`/incidents?mode=${desiredMode}`, { replace: true });
+    }
+  }, [navigate, queueMode, routeIncidentId, searchParams]);
 
   const modeIncidents = useMemo(() => {
     return incidents.filter((incident) => {
-      if (workspace.role === "on-call") {
+      if (queueMode === "on-call") {
         return incident.status === "new" || incident.status === "in_progress";
       }
       return incident.status === "escalated";
     });
-  }, [incidents, workspace.role]);
+  }, [incidents, queueMode]);
 
   const filteredIncidents = useMemo(() => {
     return modeIncidents.filter((incident) => matchesIncidentFilters(incident, filters));
@@ -106,14 +126,14 @@ export function IncidentsPage() {
       workspace.appendTrend(incidents.map((item) => item.id === incident.id ? incident : item));
       if (incident.status === "escalated") {
         setFilters(createDefaultIncidentFilters());
-        workspace.setRole("escalation");
+        setQueueMode("escalation");
         workspace.setSelectedIncidentId(incident.id);
         setStatusMessage("Инцидент отправлен на эскалацию");
         return;
       }
       if (incident.status === "in_progress") {
         setFilters(createDefaultIncidentFilters());
-        workspace.setRole("on-call");
+        setQueueMode("on-call");
         workspace.setSelectedIncidentId(incident.id);
         setStatusMessage("Инцидент принят в работу");
         return;
@@ -134,7 +154,7 @@ export function IncidentsPage() {
         ...current.filter((incident) => incident.id !== response.incident.id)
       ]);
       setFilters(createDefaultIncidentFilters());
-      workspace.setRole("on-call");
+      setQueueMode("on-call");
       workspace.setSelectedIncidentId(response.incident.id);
       workspace.appendTrend([response.incident, ...incidents.filter((incident) => incident.id !== response.incident.id)]);
       setStatusMessage("Демонстрационный сценарий выполнен: инцидент создан и добавлен в очередь");
@@ -147,11 +167,13 @@ export function IncidentsPage() {
   });
 
   const feedbackMutation = useMutation({
-    mutationFn: (id: string) => api.sendFeedback(id, {
-      usefulness: "not_useful",
-      hypothesisVerdict: "incorrect"
-    }),
-    onSuccess: () => setStatusMessage("Feedback сохранён: гипотеза отмечена как неверная"),
+    mutationFn: ({ id, payload }: { id: string; payload: FeedbackRequest }) => api.sendFeedback(id, payload),
+    onSuccess: (_response, variables) => {
+      void queryClient.invalidateQueries({ queryKey: ["incident", variables.id] });
+      setStatusMessage(variables.payload.hypothesisVerdict === "partially_correct"
+        ? "Отмечено: требуется дополнительная проверка"
+        : "Feedback сохранён: гипотеза отмечена как неверная");
+    },
     onError: () => setStatusMessage("Не удалось сохранить feedback.")
   });
 
@@ -178,9 +200,9 @@ export function IncidentsPage() {
   const onStatus = (id: string, status: IncidentStatus) => {
     statusMutation.mutate({ id, status });
   };
-  const switchRole = (role: typeof workspace.role) => {
+  const switchRole = (role: typeof queueMode) => {
     setFilters(createDefaultIncidentFilters());
-    workspace.setRole(role);
+    setQueueMode(role);
   };
 
   if (routeIncidentId) {
@@ -198,7 +220,8 @@ export function IncidentsPage() {
           role={workspace.role}
           logs={filteredLogs}
           onStatus={onStatus}
-          onFeedbackWrong={(id) => feedbackMutation.mutate(id)}
+          onFeedbackWrong={(id) => feedbackMutation.mutate({ id, payload: { usefulness: "not_useful", hypothesisVerdict: "incorrect" } })}
+          onFeedbackPartial={(id) => feedbackMutation.mutate({ id, payload: { usefulness: "useful", hypothesisVerdict: "partially_correct" } })}
           statusBusy={statusMutation.isPending || selectedIncidentQuery.isFetching || feedbackMutation.isPending}
           workspaceMode
         />
@@ -210,11 +233,12 @@ export function IncidentsPage() {
     <div className="incidents-page">
       <section className="dashboard-toolbar">
         <div className="role-mode-control" aria-label="Режим работы">
+          <span className="eyebrow">Очередь</span>
           <div className="role-switch-inline">
-            <button type="button" className={workspace.role === "on-call" ? "active" : ""} onClick={() => switchRole("on-call")}>Дежурный инженер</button>
-            <button type="button" className={workspace.role === "escalation" ? "active" : ""} onClick={() => switchRole("escalation")}>Эскалация</button>
+            <button type="button" className={queueMode === "on-call" ? "active" : ""} onClick={() => switchRole("on-call")}>Дежурный инженер</button>
+            <button type="button" className={queueMode === "escalation" ? "active" : ""} onClick={() => switchRole("escalation")}>Эскалация</button>
           </div>
-          <p>{workspace.role === "on-call"
+          <p>{queueMode === "on-call"
             ? "Дежурный инженер — первичный разбор, принятие в работу и решение по mitigation."
             : "Эскалация — очередь инцидентов, переданных другой команде с полным контекстом, timeline и evidence."}</p>
         </div>
@@ -238,8 +262,8 @@ export function IncidentsPage() {
         <section className="ops-panel incident-queue incidents-list-panel">
           <div className="panel-heading">
             <div>
-              <h2>{workspace.role === "on-call" ? "Очередь дежурного инженера" : "Очередь эскалации"}</h2>
-              <p>{workspace.role === "on-call"
+              <h2>{queueMode === "on-call" ? "Очередь дежурного инженера" : "Очередь эскалации"}</h2>
+              <p>{queueMode === "on-call"
                 ? "Новые инциденты и инциденты в работе. Возьмите сигнал в работу, закройте или передайте на эскалацию."
                 : "Только инциденты, переданные другой команде с handoff summary, timeline и evidence."}</p>
             </div>
@@ -260,12 +284,12 @@ export function IncidentsPage() {
             ))}
             {!filteredIncidents.length ? (
               <EmptyState
-                title={workspace.role === "on-call" ? "Активных инцидентов нет" : "Инцидентов на эскалации пока нет"}
-                description={workspace.role === "on-call"
+                title={queueMode === "on-call" ? "Активных инцидентов нет" : "Инцидентов на эскалации пока нет"}
+                description={queueMode === "on-call"
                   ? "Активных инцидентов для дежурного инженера нет. Запустите демонстрационный сценарий или проверьте очередь эскалации."
                   : "Нажмите «Эскалировать» в карточке инцидента, чтобы зафиксировать handoff-событие."}
               >
-                {workspace.role === "on-call" ? (
+                {queueMode === "on-call" ? (
                   <Button type="button" disabled={runScenarioMutation.isPending} onClick={() => runScenarioMutation.mutate()}>
                     {runScenarioMutation.isPending ? "Запускаем..." : "Запустить сценарий"}
                   </Button>

@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   AlertIngestSchema,
   FeedbackRequestSchema,
+  GenericIngestSchema,
   IncidentChatRequestSchema,
   IntegrationKindSchema,
   UpdateIncidentStatusSchema,
@@ -206,6 +207,28 @@ export async function registerRoutes(app: FastifyInstance, repository: IncidentR
       }
 
       return reply.status(500).send({ error: "alert_ingest_failed" });
+    }
+  });
+
+  app.post("/api/ingest/custom", async (request, reply) => {
+    try {
+      const input = parse(GenericIngestSchema, request.body);
+      const serviceName = input.serviceName ?? input.service ?? "unknown-service";
+      const incident = await repository.ingestCustom({ ...input, serviceName });
+      const analysis = analyzeIncident(incident);
+      const analyzed = await repository.saveAnalysis(incident.id, analysis);
+
+      return {
+        incident: analyzed,
+        created: true,
+        normalizedServiceName: serviceName
+      };
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return sendZodError(reply, error);
+      }
+
+      return reply.status(500).send({ error: "custom_ingest_failed" });
     }
   });
 

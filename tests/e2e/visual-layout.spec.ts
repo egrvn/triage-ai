@@ -35,7 +35,7 @@ async function assertLayout(page: Page) {
 
 test.describe("visual layout QA", () => {
   test.beforeAll(() => {
-    mkdirSync("test-results/final-product-bugfix", { recursive: true });
+    mkdirSync("test-results/service-review-pass", { recursive: true });
   });
 
   for (const viewport of viewports) {
@@ -50,7 +50,7 @@ test.describe("visual layout QA", () => {
         await expect(page.locator("body")).toBeVisible();
         await assertLayout(page);
         await page.screenshot({
-          path: `test-results/final-product-bugfix/${route === "/" ? "landing" : route.slice(1)}-${viewport.name}.png`,
+          path: `test-results/service-review-pass/${route === "/" ? "landing" : route.slice(1)}-${viewport.name}.png`,
           fullPage: true
         });
       }
@@ -63,7 +63,7 @@ test.describe("visual layout QA", () => {
         await expect(page.locator(".workspace")).toBeVisible();
         await assertLayout(page);
         await page.screenshot({
-          path: `test-results/final-product-bugfix/${route.replaceAll("/", "-").replace(/^-/, "")}-${viewport.name}.png`,
+          path: `test-results/service-review-pass/${route.replaceAll("/", "-").replace(/^-/, "")}-${viewport.name}.png`,
           fullPage: true
         });
       }

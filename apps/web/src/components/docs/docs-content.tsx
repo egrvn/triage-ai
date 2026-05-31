@@ -117,6 +117,24 @@ const sections: DocsSection[] = [
     )
   },
   {
+    id: "proactive-reactive",
+    title: "Proactive vs Reactive flow",
+    icon: Workflow,
+    keywords: ["proactive", "reactive", "prevention", "roadmap", "предотвращение"],
+    body: (
+      <div className="docs-card-grid two">
+        <article className="docs-mini-card">
+          <strong>Reactive triage в MVP</strong>
+          <p>Текущий продукт начинается с alert: собирает контекст, показывает AI-сводку, confidence, evidence и помогает выбрать действие инженера.</p>
+        </article>
+        <article className="docs-mini-card">
+          <strong>Proactive prevention в roadmap</strong>
+          <p>Следующий track — ранние сигналы риска: anomaly context, change-risk signals, SLO drift и рекомендации до появления полноценного инцидента.</p>
+        </article>
+      </div>
+    )
+  },
+  {
     id: "incident-workspace",
     title: "Incident Workspace",
     icon: SearchCheck,
@@ -197,6 +215,33 @@ const sections: DocsSection[] = [
     )
   },
   {
+    id: "generic-ingest",
+    title: "Generic ingest",
+    icon: Plug,
+    keywords: ["generic ingest", "webhook", "zabbix", "victoria metrics", "opensearch", "custom"],
+    body: (
+      <div className="docs-pilot-metrics">
+        <div className="docs-callout">
+          Generic ingest — единый endpoint для custom monitoring/logging источников. Он нужен, когда сигнал приходит не из готового adapter.
+        </div>
+        <pre><code>{JSON.stringify({
+          source: "zabbix",
+          serviceName: "checkout-svc",
+          severity: "warning",
+          message: "p95 latency выше baseline",
+          timestamp: "2026-05-31T09:55:00.000Z",
+          labels: { env: "prod", team: "payments" },
+          logSnippet: "WARN checkout-svc upstream timeout",
+          metricSnippet: "p95_latency_ms=1240"
+        }, null, 2)}</code></pre>
+        <dl className="docs-definitions">
+          <div><dt>Поддерживаемые источники</dt><dd>Zabbix, Victoria Metrics, OpenSearch, internal webhook/API и manual source из AI-ассистента.</dd></div>
+          <div><dt>Ограничение тестового режима</dt><dd>В MVP payload нормализуется в синтетический incident context. Production требует auth, validation, rate limits и audit log.</dd></div>
+        </dl>
+      </div>
+    )
+  },
+  {
     id: "integrations",
     title: "Интеграции",
     icon: Plug,
@@ -205,6 +250,8 @@ const sections: DocsSection[] = [
       <div className="docs-card-grid">
         {[
           ["Метрики Prometheus", "Источник метрик и SLO-сигналов.", "тестовый режим", "endpoint, read-only Token, alert rules"],
+          ["Generic ingest", "Единый прием custom monitoring/logging payload.", "тестовый режим", "auth, validation, payload contract, rate limits"],
+          ["Zabbix / Victoria Metrics / OpenSearch", "Custom adapters через Generic ingest или отдельные connectors.", "следующий шаг", "endpoint, service account, index/query policy"],
           ["Логи ELK", "Источник логов, trace id и контекста ошибок.", "тестовый режим", "ELK endpoint, index pattern, service account"],
           ["Оповещения Telegram", "Уведомления для дежурного инженера и deep links.", "тестовый режим", "bot Token, chat id, notification policy"],
           ["Оповещения Slack", "Командные уведомления об инцидентах.", "отключено", "Slack app, Webhook URL, workspace approval"],
@@ -335,6 +382,9 @@ const sections: DocsSection[] = [
     body: (
       <Accordion type="single" collapsible className="faq-list faq-list--accordion">
         {[
+          ["Зачем AI, если уже есть observability tools?", "Observability показывает факты в разных системах. Triage AI собирает их в incident context, объясняет гипотезу с citations и помогает сократить переходы между инструментами."],
+          ["Что AI не делает?", "AI не выполняет автономный rollback и не закрывает production-инциденты сам. Он предлагает гипотезу, confidence, evidence и следующий шаг для инженера."],
+          ["Что такое Generic ingest?", "Это backend endpoint для custom payload из Zabbix, Victoria Metrics, OpenSearch, internal webhook/API или manual source."],
           ["Почему данные тестовые?", "Синтетические сигналы позволяют безопасно проверить полный flow без реальных secrets и customer data."],
           ["Можно ли подключить реальные Prometheus/ELK?", "Да, через production adapters, endpoint allowlist и secrets manager."],
           ["Что означает низкая уверенность?", "Система не уверена в гипотезе причины, потому что сигнал неполный или подтверждающие данные слабые."],

@@ -8,6 +8,7 @@ import {
   EscalationResponseSchema,
   IntegrationSettingSchema,
   DemoResetResponseSchema,
+  GenericIngestResponseSchema,
   RunScenarioResponseSchema,
   ScenarioSummarySchema,
   TestIntegrationResponseSchema,
@@ -15,6 +16,8 @@ import {
   type DemoResetResponse,
   type EscalationEvent,
   type EscalationResponse,
+  type GenericIngest,
+  type GenericIngestResponse,
   type IncidentDetail,
   type IncidentEvent,
   type IncidentChatMessage,
@@ -158,5 +161,10 @@ export const api = {
   resetDemo: () =>
     request<DemoResetResponse>("/api/demo/reset", DemoResetResponseSchema, {
       method: "POST"
+    }),
+  ingestCustom: (payload: GenericIngest) =>
+    request<GenericIngestResponse>("/api/ingest/custom", GenericIngestResponseSchema, {
+      method: "POST",
+      body: JSON.stringify(payload)
     })
 };

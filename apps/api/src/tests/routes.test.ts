@@ -61,6 +61,41 @@ describe("api routes", () => {
     await app.close();
   });
 
+  it("creates analyzed incident through Generic ingest with service alias", async () => {
+    const app = await createApp({
+      repository: new MemoryIncidentRepository(),
+      config: {
+        nodeEnv: "test",
+        host: "127.0.0.1",
+        port: 0,
+        storageMode: "memory",
+        corsOrigin: "*"
+      }
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/ingest/custom",
+      payload: {
+        source: "zabbix",
+        service: "checkout-svc",
+        severity: "warning",
+        message: "p95 latency выше baseline",
+        labels: { team: "payments" },
+        logSnippet: "WARN checkout-svc upstream timeout",
+        metricSnippet: "p95_latency_ms=1240"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().created).toBe(true);
+    expect(response.json().normalizedServiceName).toBe("checkout-svc");
+    expect(response.json().incident.analysis.confidence).toBe("low");
+    expect(response.json().incident.events[0].text).toContain("Generic ingest");
+
+    await app.close();
+  });
+
   it("answers incident chat with citations and preserves history", async () => {
     const app = await createApp({
       repository: new MemoryIncidentRepository(),

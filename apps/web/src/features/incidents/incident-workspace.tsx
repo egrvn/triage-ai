@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import type { IncidentListItem } from "@triage-ai/shared";
 
 const ROLE_KEY = "triage-ai-role";
-const GUIDE_KEY = "triage-ai-guide-visible";
+export const ONBOARDING_HIDDEN_KEY = "triage-ai-onboarding-hidden";
 
 export type RoleMode = "on-call" | "escalation";
 
@@ -67,8 +67,8 @@ export function IncidentWorkspaceProvider({ children }: { children: ReactNode })
     return window.localStorage.getItem(ROLE_KEY) === "escalation" ? "escalation" : "on-call";
   });
   const [guideOpen, setGuideOpen] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.localStorage.getItem(GUIDE_KEY) === "true";
+    if (typeof window === "undefined") return true;
+    return window.localStorage.getItem(ONBOARDING_HIDDEN_KEY) !== "true";
   });
 
   useEffect(() => {
@@ -76,7 +76,7 @@ export function IncidentWorkspaceProvider({ children }: { children: ReactNode })
   }, [role]);
 
   useEffect(() => {
-    window.localStorage.setItem(GUIDE_KEY, String(guideOpen));
+    window.localStorage.setItem(ONBOARDING_HIDDEN_KEY, String(!guideOpen));
   }, [guideOpen]);
 
   const value = useMemo<IncidentWorkspaceValue>(() => ({

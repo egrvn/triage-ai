@@ -46,6 +46,19 @@ const llmProviders = [
     }
   },
   {
+    kind: "custom",
+    name: "Custom endpoint",
+    status: "needs_config",
+    configured: false,
+    active: false,
+    storagePolicy: "backend env / secrets manager",
+    dataPolicy: "OpenAI-compatible или self-hosted endpoint требует allowlist, TLS policy и evaluation.",
+    sample: {
+      prompt: "Analyze incident context with citations.",
+      output: "needs_config: endpoint не задан."
+    }
+  },
+  {
     kind: "yandexgpt",
     name: "YandexGPT",
     status: "needs_config",
@@ -83,21 +96,16 @@ const llmProviders = [
       prompt: "Explain hypothesis using only evidence ids.",
       output: "needs_config: backend env отсутствует."
     }
-  },
-  {
-    kind: "custom",
-    name: "Custom endpoint",
-    status: "needs_config",
-    configured: false,
-    active: false,
-    storagePolicy: "backend env / secrets manager",
-    dataPolicy: "Для self-hosted/OpenAI-compatible endpoint нужны endpoint allowlist и TLS policy.",
-    sample: {
-      prompt: "Analyze incident context with citations.",
-      output: "needs_config: endpoint не задан."
-    }
   }
 ] as const;
+
+const genericIngestAdapters = [
+  "Generic ingest endpoint",
+  "Zabbix",
+  "Victoria Metrics",
+  "OpenSearch",
+  "Custom webhook/API"
+];
 
 function integrationStatusLabel(integration: IntegrationSetting) {
   if (!integration.enabled || integration.status === "disabled") return "отключено";
@@ -301,6 +309,32 @@ export function IntegrationsPage() {
         Сейчас приложение работает в тестовом режиме. Данные синтетические и предназначены для демонстрации полного цикла разбора инцидента.
       </div>
 
+      <section className="ops-panel generic-ingest-panel">
+        <div className="llm-provider-section__heading">
+          <div>
+            <span className="eyebrow">Generic ingest endpoint</span>
+            <h2>Единая точка входа для custom monitoring и logging</h2>
+            <p>
+              Endpoint принимает payload от систем, которые не покрыты готовыми adapters: Zabbix, Victoria Metrics,
+              OpenSearch, внутренний webhook или API. Frontend показывает контракт, но real credentials остаются в backend.
+            </p>
+          </div>
+          <StatusPill tone="adapter">POST /api/ingest/custom</StatusPill>
+        </div>
+        <div className="integration-logo-grid compact">
+          {genericIngestAdapters.map((name) => <span key={name}>{name}</span>)}
+        </div>
+        <pre className="generic-ingest-sample"><code>{JSON.stringify({
+          source: "zabbix",
+          serviceName: "checkout-svc",
+          severity: "warning",
+          message: "p95 latency выше baseline",
+          labels: { env: "prod", team: "payments" },
+          logSnippet: "WARN checkout-svc timeout from upstream API",
+          metricSnippet: "p95_latency_ms=1240"
+        }, null, 2)}</code></pre>
+      </section>
+
       <div className="integrations-layout">
         <section className="integration-sections" aria-label="Интеграции">
           <div className="integration-section-block">
@@ -440,6 +474,13 @@ export function IntegrationsPage() {
             <span>Production</span>
             <strong>backend env / secrets manager</strong>
           </article>
+          <article>
+            <span>PII masking</span>
+            <strong>policy + roadmap</strong>
+          </article>
+        </div>
+        <div className="mock-callout">
+          PII masking в MVP показан как production boundary: правила маскирования, local mode и audit log должны быть реализованы до подключения customer data.
         </div>
       </section>
     </div>

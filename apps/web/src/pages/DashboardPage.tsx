@@ -115,7 +115,7 @@ export function DashboardPage() {
   }, [incidents, workspace]);
 
   const selectedIncident = incidents.find((incident) => incident.id === workspace.selectedIncidentId) ?? incidents[0];
-  const trendData = workspace.trend.length ? workspace.trend : incidents.length ? [buildTrendPoint(incidents, "сейчас")] : [];
+  const trendData = workspace.trend.length ? workspace.trend : [buildTrendPoint(incidents, incidents.length ? "сейчас" : "baseline")];
 
   const runScenarioMutation = useMutation({
     mutationFn: async (scenarioId: string) => {
@@ -131,7 +131,6 @@ export function DashboardPage() {
       ]);
       void queryClient.invalidateQueries({ queryKey: ["incidents"] });
       workspace.setSelectedIncidentId(response.incident.id);
-      workspace.setRole("on-call");
       const nextIncidents = [response.incident, ...incidents.filter((incident) => incident.id !== response.incident.id)];
       workspace.appendTrend(nextIncidents);
       setStatusMessage("Демонстрационный сценарий выполнен: инцидент создан и проанализирован");
@@ -174,7 +173,6 @@ export function DashboardPage() {
       void queryClient.invalidateQueries({ queryKey: ["incidents"] });
       workspace.appendTrend(incidents.map((item) => item.id === incident.id ? incident : item));
       if (incident.status === "escalated") {
-        workspace.setRole("escalation");
         workspace.setSelectedIncidentId(incident.id);
         setStatusMessage("Инцидент отправлен на эскалацию");
         return;
@@ -184,9 +182,10 @@ export function DashboardPage() {
   });
 
   const metrics = useMemo(() => ({
-    criticalActive: incidents.filter((incident) => incident.severity === "critical" && incident.status !== "closed").length,
-    analyzed: incidents.filter((incident) => Boolean(incident.confidence)).length,
-    lowConfidence: incidents.filter((incident) => incident.confidence === "low").length
+    new: incidents.filter((incident) => incident.status === "new").length,
+    inProgress: incidents.filter((incident) => incident.status === "in_progress").length,
+    escalated: incidents.filter((incident) => incident.status === "escalated").length,
+    closed: incidents.filter((incident) => incident.status === "closed").length
   }), [incidents]);
 
   const submitSearch = (value: string) => {
@@ -220,15 +219,6 @@ export function DashboardPage() {
           onSubmit={submitSearch}
           placeholder="Искать инцидент или сервис..."
         />
-        <div className="role-mode-control" aria-label="Режим работы">
-          <div className="role-switch-inline">
-            <button type="button" className={workspace.role === "on-call" ? "active" : ""} onClick={() => workspace.setRole("on-call")}>Дежурный инженер</button>
-            <button type="button" className={workspace.role === "escalation" ? "active" : ""} onClick={() => workspace.setRole("escalation")}>Эскалация</button>
-          </div>
-          <p>{workspace.role === "on-call"
-            ? "Фокус на impact и ближайшем безопасном действии."
-            : "Фокус на evidence и передаче контекста команде."}</p>
-        </div>
         <Button type="button" variant="outline" disabled={resetMutation.isPending} onClick={() => resetMutation.mutate()}>
           <RefreshCcw size={16} className={resetMutation.isPending ? "spin" : ""} aria-hidden="true" />
           Обновить
@@ -271,10 +261,11 @@ export function DashboardPage() {
         ) : null}
       </section>
 
-      <section className="metrics-strip">
-        <MetricCard label="Активные критичные" value={metrics.criticalActive} caption="не закрыты" icon={<AlertTriangle size={18} />} />
-        <MetricCard label="Проанализировано ИИ" value={metrics.analyzed} caption="есть сводка и гипотеза" icon={<Sparkles size={18} />} />
-        <MetricCard label="Низкая уверенность" value={metrics.lowConfidence} caption="нужна ручная проверка" icon={<ShieldAlert size={18} />} />
+      <section className="metrics-strip" data-testid="dashboard-summary-metrics">
+        <MetricCard label="Новые" value={metrics.new} caption="ожидают triage" icon={<Info size={18} />} />
+        <MetricCard label="В работе" value={metrics.inProgress} caption="приняты инженером" icon={<Sparkles size={18} />} />
+        <MetricCard label="Эскалация" value={metrics.escalated} caption="handoff команде" icon={<AlertTriangle size={18} />} />
+        <MetricCard label="Закрытые" value={metrics.closed} caption="есть история" icon={<ShieldAlert size={18} />} />
       </section>
 
       <div className="dashboard-overview-grid">
@@ -401,6 +392,9 @@ export function DashboardPage() {
             <span className="eyebrow">{roleCopy[workspace.role].title}</span>
             <h2>Рекомендации меняются по роли</h2>
             <p>{roleCopy[workspace.role].hint}</p>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/settings">Изменить в настройках</Link>
+            </Button>
           </div>
         </section>
       </div>

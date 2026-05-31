@@ -4,6 +4,7 @@ import type {
   DemoResetResponse,
   EscalationEvent,
   EscalationResponse,
+  GenericIngest,
   IncidentAnalysis,
   IncidentChatMessage,
   IncidentDetail,
@@ -143,6 +144,76 @@ export class MemoryIncidentRepository implements IncidentRepository {
     return clone(this.withRuntimeState(incident));
   }
 
+  async ingestCustom(input: GenericIngest): Promise<IncidentDetail> {
+    const serviceName = input.serviceName ?? input.service ?? "unknown-service";
+    const timestamp = input.timestamp ?? new Date().toISOString();
+    const incidentId = `inc-${input.source || "custom"}-${nowId()}`;
+    const metric = input.metricSnippet
+      ? [{
+          id: `${incidentId}-metric-custom`,
+          timestamp,
+          serviceName,
+          name: "custom_signal_value",
+          value: 1,
+          unit: "signal",
+          labels: { source: input.source, raw: input.metricSnippet.slice(0, 120), ...input.labels }
+        }]
+      : [];
+    const logs = input.logSnippet
+      ? [{
+          id: `${incidentId}-log-custom`,
+          timestamp,
+          serviceName,
+          level: input.severity === "critical" ? "error" as const : "warn" as const,
+          message: input.logSnippet,
+          source: input.source
+        }]
+      : [{
+          id: `${incidentId}-log-message`,
+          timestamp,
+          serviceName,
+          level: input.severity === "critical" ? "error" as const : "info" as const,
+          message: input.description ?? input.message,
+          source: input.source
+        }];
+    const deploys = input.deployEvent
+      ? [{
+          id: `${incidentId}-deploy-custom`,
+          timestamp,
+          serviceName,
+          version: input.labels.version ?? "custom-event",
+          branch: input.labels.branch ?? "custom-context",
+          commitSha: input.labels.commitSha ?? "unknown",
+          author: input.labels.author ?? input.source,
+          summary: input.deployEvent
+        }]
+      : [];
+    const incident: IncidentDetail = {
+      id: incidentId,
+      title: input.title ?? input.message.slice(0, 120),
+      serviceName,
+      severity: input.severity,
+      status: "new",
+      startedAt: timestamp,
+      detectedAt: timestamp,
+      summary: input.description ?? input.message,
+      metrics: metric,
+      logs,
+      deploys,
+      events: []
+    };
+
+    this.incidents.set(incidentId, incident);
+    this.addEvent(incidentId, {
+      type: "created",
+      actor: input.source === "manual" ? "Дежурный инженер" : "Generic ingest",
+      text: input.source === "manual"
+        ? "Инцидент создан вручную через AI-ассистент."
+        : "Инцидент создан через Generic ingest endpoint."
+    });
+    return clone(this.withRuntimeState(incident));
+  }
+
   async listIncidents(): Promise<IncidentListItem[]> {
     return [...this.incidents.values()]
       .toSorted((a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime())
@@ -215,9 +286,24 @@ export class MemoryIncidentRepository implements IncidentRepository {
     return clone(this.withRuntimeState(nextIncident));
   }
 
-  async saveFeedback(incidentId: string, _feedback: FeedbackRequest): Promise<FeedbackResponse> {
+  async saveFeedback(incidentId: string, feedback: FeedbackRequest): Promise<FeedbackResponse> {
     if (!this.incidents.has(incidentId)) {
       throw new Error(`Incident ${incidentId} was not found`);
+    }
+
+    if (feedback.hypothesisVerdict === "partially_correct") {
+      this.addEvent(incidentId, {
+        type: "feedback_recorded",
+        actor: "Дежурный инженер",
+        text: "Отмечено: нужно больше данных для подтверждения гипотезы."
+      });
+    }
+    if (feedback.hypothesisVerdict === "incorrect") {
+      this.addEvent(incidentId, {
+        type: "feedback_recorded",
+        actor: "Дежурный инженер",
+        text: "Feedback сохранён: гипотеза отмечена как неверная."
+      });
     }
 
     return {

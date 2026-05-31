@@ -68,6 +68,23 @@ test.describe("AI-ассистент", () => {
     await expectNoViewportOverflow(page);
   });
 
+  test("/assistant creates manual incident through Generic ingest", async ({ page }) => {
+    await login(page);
+    await page.goto("/assistant");
+
+    await page.getByLabel("Сервис").fill("manual-svc");
+    await page.getByLabel("Описание сигнала").fill("Ручной сигнал: рост ошибок manual-svc после изменения конфигурации.");
+    await page.getByRole("button", { name: /Создать инцидент|Создать через Generic ingest/i }).click();
+
+    await expect(page.getByRole("status")).toContainText(/Инцидент создан через Generic ingest/i);
+    await expect(page.locator(".assistant-incident-list").getByText(/manual-svc/i).first()).toBeVisible();
+    await page.getByPlaceholder(/Задайте вопрос по выбранному инциденту/i).fill("Что проверить первым?");
+    await page.getByRole("button", { name: /Отправить/i }).click();
+    await expect(page.locator(".incident-assistant-panel .assistant-message--assistant").last()).toContainText(/Сначала проверьте/i);
+    await expectNoHorizontalScroll(page);
+    await expectNoViewportOverflow(page);
+  });
+
   test("/assistant incident list scrolls without clipping many cards", async ({ page, request }) => {
     const scenarioIds = [
       "release-regression-5xx",

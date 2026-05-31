@@ -4,9 +4,9 @@ import { Link } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import { Button } from "@/components/ui/button";
+import { ONBOARDING_HIDDEN_KEY } from "@/features/incidents/incident-workspace";
 
 const ROLE_KEY = "triage-ai-role";
-const GUIDE_KEY = "triage-ai-guide-visible";
 
 export function SettingsPage() {
   const { session } = useAuth();
@@ -112,7 +112,7 @@ export function SettingsPage() {
             type="button"
             variant="outline"
             onClick={() => {
-              window.localStorage.removeItem(GUIDE_KEY);
+              window.localStorage.removeItem(ONBOARDING_HIDDEN_KEY);
               setMessage("Инструкция в панели управления снова будет показана");
             }}
           >
